@@ -1,0 +1,13 @@
+{
+  "payment": {
+    "isProduction": false,
+    "sandbox": {
+      "serverKey": "SB-Mid-server-B51MQ6iGUBvg6wWoYWy23_ZB",
+      "clientKey": "SB-Mid-client-0BH_JWSjUOEQsgI5"
+    },
+    "production": {
+      "serverKey": "",
+      "clientKey": ""
+    }
+  }
+}

@@ -1,0 +1,328 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { Trash, Plus, CreditCard, Upload, Zap, ShieldCheck, CheckCircle } from 'lucide-react';
+import { useToast } from '../components/Toast';
+
+export default function PaymentSettings() {
+    const [banks, setBanks] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [qrisUrl, setQrisUrl] = useState('');
+    const [paymentSettings, setPaymentSettings] = useState<any>(null);
+    const toast = useToast();
+
+    const [newBank, setNewBank] = useState({
+        bank_name: '',
+        account_number: '',
+        account_holder: ''
+    });
+
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:5000/api';
+
+    useEffect(() => {
+        fetchBanks();
+        fetchQris();
+        fetchPaymentSettings();
+    }, []);
+
+    const fetchBanks = async () => {
+        try {
+            const { data } = await supabase.from('bank_accounts').select('*');
+            if (data) setBanks(data);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const fetchQris = async () => {
+        const { data } = await supabase.from('site_config').select('value').eq('key', 'qris_image').maybeSingle();
+        if (data) setQrisUrl(data.value?.url || '');
+    };
+
+    const fetchPaymentSettings = async () => {
+        const { data } = await supabase.from('site_config').select('value').eq('key', 'payment_settings').maybeSingle();
+        if (data) setPaymentSettings(data.value);
+    };
+
+    const savePaymentSettings = async (settings = paymentSettings) => {
+        try {
+            const { error } = await supabase.from('site_config').upsert({
+                key: 'payment_settings',
+                value: settings,
+                updated_at: new Date().toISOString()
+            });
+
+            if (!error) {
+                toast.success("Payment settings saved!");
+            } else {
+                toast.error("Failed to save: " + error.message);
+            }
+        } catch (error) {
+            toast.error("Error saving payment settings");
+        }
+    };
+
+    const handlePaymentChange = (mode: 'sandbox' | 'production', key: 'secretKey', value: string) => {
+        setPaymentSettings((prev: any) => ({
+            ...prev,
+            [mode]: {
+                ...prev[mode],
+                [key]: value
+            }
+        }));
+    };
+
+    const updatePaymentMode = async (isProduction: boolean) => {
+        if (!confirm(`Switch to ${isProduction ? 'Production' : 'Sandbox'}?`)) return;
+        const updated = { ...paymentSettings, isProduction };
+        setPaymentSettings(updated);
+        await savePaymentSettings(updated);
+    };
+
+    const handleAddBank = async () => {
+        if (!newBank.bank_name || !newBank.account_number) return;
+        setLoading(true);
+        const { error } = await supabase.from('bank_accounts').insert([newBank]);
+        if (error) {
+            toast.error("Gagal menambah bank");
+        } else {
+            toast.success("Bank berhasil ditambahkan");
+            setNewBank({ bank_name: '', account_number: '', account_holder: '' });
+            fetchBanks();
+        }
+        setLoading(false);
+    };
+
+    const handleDeleteBank = async (id: string) => {
+        if (!confirm("Hapus bank ini?")) return;
+        await supabase.from('bank_accounts').delete().eq('id', id);
+        fetchBanks();
+    };
+
+    const handleUploadQris = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        const fileName = `qris-${Date.now()}.png`;
+
+        setLoading(true);
+        try {
+            // Upload to 'receipts' or 'content' bucket? Let's use receipts for simplicity as we made it public
+            // or 'public' bucket if exists.
+
+            // Assume 'receipts' bucket exists from setup
+            const { data, error } = await supabase.storage.from('receipts').upload(fileName, file);
+
+            if (error) throw error;
+
+            const publicUrl = supabase.storage.from('receipts').getPublicUrl(fileName).data.publicUrl;
+
+            // Save to Config
+            const { error: configError } = await supabase.from('site_config').upsert({
+                key: 'qris_image',
+                value: { url: publicUrl }
+            });
+
+            if (configError) throw configError;
+
+            setQrisUrl(publicUrl);
+            toast.success("QRIS Updated!");
+
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Upload failed: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="p-6 bg-[#050505] min-h-screen text-white">
+            <h1 className="text-2xl font-bold mb-6">Pengaturan Pembayaran Manual</h1>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Bank Accounts */}
+                <div className="bg-[#111] p-6 rounded-2xl border border-zinc-800">
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <CreditCard className="text-[#D4F932]" />
+                        Daftar Rekening Bank
+                    </h2>
+
+                    <div className="space-y-4 mb-6">
+                        {banks.map(bank => (
+                            <div key={bank.id} className="flex items-center justify-between bg-black p-4 rounded-xl border border-zinc-800">
+                                <div>
+                                    <p className="font-bold text-[#D4F932]">{bank.bank_name}</p>
+                                    <p className="text-lg font-mono">{bank.account_number}</p>
+                                    <p className="text-sm text-zinc-500">{bank.account_holder}</p>
+                                </div>
+                                <button
+                                    onClick={() => handleDeleteBank(bank.id)}
+                                    className="p-2 hover:bg-zinc-900 rounded-full text-zinc-500 hover:text-red-500 transition-colors">
+                                    <Trash size={18} />
+                                </button>
+                            </div>
+                        ))}
+                        {banks.length === 0 && <p className="text-zinc-600 italic">Belum ada rekening bank.</p>}
+                    </div>
+
+                    <div className="bg-zinc-900/50 p-4 rounded-xl space-y-3">
+                        <p className="text-sm font-bold text-zinc-400 uppercase">Tambah Rekening Baru</p>
+                        <input
+                            placeholder="Nama Bank (misal: BCA, Mandiri)"
+                            className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:border-[#D4F932]"
+                            value={newBank.bank_name}
+                            onChange={e => setNewBank({ ...newBank, bank_name: e.target.value })}
+                        />
+                        <input
+                            placeholder="Nomor Rekening"
+                            className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:border-[#D4F932]"
+                            value={newBank.account_number}
+                            onChange={e => setNewBank({ ...newBank, account_number: e.target.value })}
+                        />
+                        <input
+                            placeholder="Atas Nama (Pemilik Rekening)"
+                            className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:border-[#D4F932]"
+                            value={newBank.account_holder}
+                            onChange={e => setNewBank({ ...newBank, account_holder: e.target.value })}
+                        />
+                        <button
+                            onClick={handleAddBank}
+                            disabled={loading}
+                            className="w-full bg-white text-black font-bold py-2 rounded-lg hover:bg-[#D4F932] transition-colors flex justify-center items-center gap-2">
+                            <Plus size={16} /> Tambah Bank
+                        </button>
+                    </div>
+                </div>
+
+                {/* QRIS Upload */}
+                <div className="bg-[#111] p-6 rounded-2xl border border-zinc-800 h-fit">
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <Upload className="text-[#D4F932]" />
+                        Upload QRIS
+                    </h2>
+
+                    <div className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-2xl p-8 hover:border-[#D4F932] transition-colors bg-black group relative overflow-hidden">
+                        {qrisUrl ? (
+                            <img src={qrisUrl} alt="QRIS" className="max-w-[200px] mb-4 rounded-lg" />
+                        ) : (
+                            <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center mb-4 text-zinc-600 group-hover:text-[#D4F932]">
+                                <Upload size={32} />
+                            </div>
+                        )}
+
+                        <p className="text-zinc-500 mb-2 text-sm">Upload gambar QRIS (PNG/JPG)</p>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleUploadQris}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                        {loading && <p className="text-[#D4F932] text-xs animate-pulse">Uploading...</p>}
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-4 text-center">
+                        QRIS ini akan ditampilkan kepada user saat memilih pembayaran manual.
+                    </p>
+                </div>
+            </div>
+
+            {/* Xendit Section */}
+            {paymentSettings && (
+                <div className="border-t border-zinc-800 pt-8 mt-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-[#D4F932]/10 flex items-center justify-center text-[#D4F932]">
+                                <Zap size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-white">Xendit Payment Gateway</h3>
+                                <p className="text-sm text-zinc-500">Automatic payment verification.</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => savePaymentSettings()}
+                            className="bg-zinc-800 text-white font-bold px-6 py-2 rounded-lg hover:bg-zinc-700 transition-colors flex items-center gap-2 text-sm"
+                        >
+                            <CheckCircle size={16} /> Save Keys
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Sandbox Card */}
+                        <div className={`p-6 rounded-2xl border transition-all ${!paymentSettings.isProduction ? 'bg-[#D4F932]/5 border-[#D4F932] shadow-[0_0_30px_-5px_rgba(212,249,50,0.1)]' : 'bg-[#111] border-zinc-800 opacity-80 hover:opacity-100'}`}>
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h4 className="text-lg font-bold text-white">Sandbox Mode</h4>
+                                        {!paymentSettings.isProduction && <span className="bg-[#D4F932] text-black text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>}
+                                    </div>
+                                    <p className="text-xs text-zinc-500">Use Xendit Development Keys.</p>
+                                </div>
+                                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                    <ShieldCheck size={16} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 mb-6">
+                                <div>
+                                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Secret Key</label>
+                                    <input
+                                        value={paymentSettings.sandbox?.secretKey || ''}
+                                        onChange={(e) => handlePaymentChange('sandbox', 'secretKey', e.target.value)}
+                                        className="w-full bg-black border border-zinc-700 p-2 rounded text-xs font-mono text-zinc-300 focus:border-[#D4F932] outline-none"
+                                        placeholder="xnd_development_..."
+                                    />
+                                </div>
+                            </div>
+
+                            {paymentSettings.isProduction && (
+                                <button
+                                    onClick={() => updatePaymentMode(false)}
+                                    className="w-full py-3 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-sm font-bold transition-colors"
+                                >
+                                    Switch to Sandbox
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Production Card */}
+                        <div className={`p-6 rounded-2xl border transition-all ${paymentSettings.isProduction ? 'bg-red-500/5 border-red-500 shadow-[0_0_30px_-5px_rgba(239,68,68,0.1)]' : 'bg-[#111] border-zinc-800 opacity-80 hover:opacity-100'}`}>
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h4 className="text-lg font-bold text-white">Production Mode</h4>
+                                        {paymentSettings.isProduction && <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>}
+                                    </div>
+                                    <p className="text-xs text-zinc-500">Use Xendit Production Keys.</p>
+                                </div>
+                                <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+                                    <Zap size={16} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 mb-6">
+                                <div>
+                                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Secret Key</label>
+                                    <input
+                                        value={paymentSettings.production?.secretKey || ''}
+                                        onChange={(e) => handlePaymentChange('production', 'secretKey', e.target.value)}
+                                        className="w-full bg-black border border-zinc-700 p-2 rounded text-xs font-mono text-zinc-300 focus:border-red-500 outline-none"
+                                        placeholder="xnd_production_..."
+                                    />
+                                </div>
+                            </div>
+
+                            {!paymentSettings.isProduction && (
+                                <button
+                                    onClick={() => updatePaymentMode(true)}
+                                    className="w-full py-3 rounded-xl border border-zinc-700 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500 text-sm font-bold transition-colors"
+                                >
+                                    Switch to Production
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+

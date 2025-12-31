@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #050505;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+/* Hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+/* Infinite Marquee Animation */
+@keyframes scroll-right {
+  0% {
+    transform: translateX(-50%);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes scroll-left {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll-right {
+  animation: scroll-right 40s linear infinite;
+}
+
+.animate-scroll-left {
+  animation: scroll-left 40s linear infinite;
+}
+
+/* Pause on hover */
+.pause-on-hover:hover .animate-scroll-right,
+.pause-on-hover:hover .animate-scroll-left {
+  animation-play-state: paused;
+}

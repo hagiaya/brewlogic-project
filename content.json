@@ -1,0 +1,91 @@
+{
+    "hero": {
+        "title": "Master Your \n Morning Ritual",
+        "subtitle": "BrewLogic adalah asisten seduh kopi pribadi berbasis AI yang dirancang untuk mengubah setiap home brewer menjadi barista ahli. Dengan menganalisis variabel kompleks seperti asal biji, proses pasca-panen, hingga jenis grinder, BrewLogic menciptakan resep presisi secara otomatis agar Anda bisa menikmati sweet spot kopi setiap hari tanpa trial-and-error yang boros.",
+        "ctaText": "Start Brewing Now",
+        "ctaLink": "/#pricing"
+    },
+    "howItWorks": {
+        "title": "Cara Kerja BrewLogic",
+        "subtitle": "Tiga langkah sederhana menuju cangkir kopi sempurna, bertenaga kecerdasan buatan.",
+        "steps": [
+            {
+                "title": "1. Input Variabel",
+                "desc": "Masukkan detail biji kopi (asal, proses), alat seduh, dan grinder yang Anda gunakan."
+            },
+            {
+                "title": "2. AI Calibration",
+                "desc": "Algoritma kami menganalisis ribuan data untuk menentukan suhu, gilingan, dan rasio ideal."
+            },
+            {
+                "title": "3. Seduh Presisi",
+                "desc": "Ikuti panduan step-by-step real-time: kapan menuang, kapan mengaduk, hingga tetes terakhir."
+            }
+        ]
+    },
+    "pricing": {
+        "title": "Pilih Paket Membership",
+        "subtitle": "Investasi kecil untuk kenikmatan kopi sempurna setiap hari. Hemat hingga 58% dengan paket tahunan."
+    },
+    "testimonials": {
+        "title": "Kata Mereka Tentang BrewLogic",
+        "items": [
+            {
+                "name": "Andreas Lukman",
+                "role": "Home Brewer",
+                "text": "Saya selalu kesulitan menyeduh kopi anaerobic process. BrewLogic menyarankan suhu yang lebih rendah dan gilingan yang tak terpikirkan sebelumnya. Hasilnya? Manis luar biasa!"
+            },
+            {
+                "name": "Sarah Wijaya",
+                "role": "Coffee Shop Owner",
+                "text": "Fitur kalibrasi grindernya sangat akurat. Saya menggunakannya untuk menstandarisasi resep manual brew di kedai saya. Barista junior jadi lebih cepat belajar."
+            },
+            {
+                "name": "Budi Santoso",
+                "role": "Coffee Enthusiast",
+                "text": "Investasi terbaik untuk hobi kopi saya. Daripada buang biji mahal karena salah seduh, mending pakai BrewLogic. Rasanya konsisten setiap pagi."
+            },
+            {
+                "name": "Jessica Tan",
+                "role": "Q Grader",
+                "text": "Akurasi profil rasanya mengejutkan. Sangat membantu saat saya sedang cupping atau ingin eksplorasi potensi biji baru tanpa banyak trial."
+            },
+            {
+                "name": "Rizky Pratama",
+                "role": "Daily Drinker",
+                "text": "Dulu kopi saya selalu pahit atau asam nyegrak. Sejak pakai BrewLogic, saya baru sadar kalau air yang saya pakai kalsiumnya terlalu tinggi. Game changer!"
+            }
+        ]
+    },
+    "grinder": {
+        "title": "Database Grinder Terlengkap",
+        "subtitle": "BrewLogic mendukung kalibrasi untuk berbagai grinder populer di pasar. Cek apakah alatmu terdaftar.",
+        "disclaimer": "*Data ini adalah referensi awal. Hasil akhir dipengaruhi kalibrasi alat & usia burr. Alat Anda belum ada? <a href=\"#\" className=\"text-[#D4F932] underline hover:no-underline\">Request di sini.</a>"
+    },
+    "faq": {
+        "title": "Pertanyaan Umum (FAQ)",
+        "items": [
+            {
+                "question": "Apakah aplikasi ini cocok untuk pemula?",
+                "answer": "Sangat cocok! BrewLogic dirancang untuk memandu Anda dari nol. Anda hanya perlu memilih alat yang Anda punya, dan kami yang akan menghitung sisanya."
+            },
+            {
+                "question": "Apakah support untuk grinder manual lama?",
+                "answer": "Ya, database kami mencakup ratusan grinder mulai dari entry-level (seperti Hario Mini Mill) hingga high-end (seperti Comandante dan Kinu)."
+            },
+            {
+                "question": "Bagaimana cara berlangganan?",
+                "answer": "Pilih paket di atas, lakukan pembayaran melalui QRIS atau Transfer Bank, dan akun Anda akan aktif secara instan."
+            },
+            {
+                "question": "Apakah ada garansi jika resep tidak enak?",
+                "answer": "Kopi adalah subyektif, namun algoritma kami didasarkan pada standar SCA (Specialty Coffee Association). Kami menyediakan fitur 'Feedback Loop' dimana Anda bisa memberi masukan rasa (terlalu pahit/asam) dan AI akan memperbaiki resep berikutnya."
+            }
+        ]
+    },
+    "finalCta": {
+        "title": "Siap Menyeduh Kopi Terbaikmu?",
+        "subtitle": "Bergabunglah sekarang dan rasakan perbedaan di cangkir pertama. Jangan biarkan biji kopi spesialmu tersia-sia.",
+        "buttonText": "Coba BrewLogic Sekarang"
+    }
+}
