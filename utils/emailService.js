@@ -13,6 +13,7 @@ const sendEmailGeneric = async (params) => {
     }
 
     try {
+        console.log('Attempting to send email to:', params.to_email, 'with subject:', params.subject);
         const response = await emailjs.send(serviceID, templateID, params, publicKey);
         console.log('Email sent:', response.status, response.text);
         return true;

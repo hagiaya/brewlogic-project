@@ -687,20 +687,20 @@ app.put('/api/content/:section', async (req, res) => {
     res.json(content[section]);
 });
 
+// Catch-all 404 for API routes to always return JSON (fixes "Unexpected token <")
+app.use('/api/*path', (req, res) => {
+    res.status(404).json({ error: `Route ${req.originalUrl} not found on this server.` });
+});
+
 // Export for Vercel
 export default app;
 
-// Run standalone logic
-const isMain = process.argv[1] === new URL(import.meta.url).pathname ||
-    process.argv[1].replace(/\\/g, '/') === new URL(import.meta.url).pathname.substring(1) ||
-    process.argv[1].endsWith('server.js');
-
-if (isMain) {
-    // Function for local development
-    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-        app.listen(PORT, () => {
-            console.log(`Server running on http://localhost:${PORT}`);
-            console.log(`Server running in ${process.env.XENDIT_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'} mode`);
-        });
-    }
+// Start server if not running on Vercel
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`[OK] API Server started on port ${PORT}`);
+        console.log(`[OK] Mode: ${process.env.XENDIT_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'}`);
+    }).on('error', (err) => {
+        console.error('[ERROR] Server failed to start:', err.message);
+    });
 }

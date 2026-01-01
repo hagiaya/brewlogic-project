@@ -9,6 +9,10 @@ import { supabase } from '../utils/supabaseClient';
 import { useToast } from '../components/Toast';
 import { sendActivationEmail } from '../utils/emailService';
 import PaymentSettings from './PaymentSettings';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Download } from 'lucide-react';
 
 export default function AdminDashboard() {
     const navigate = useNavigate();
@@ -101,6 +105,52 @@ export default function AdminDashboard() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const exportToExcel = () => {
+        if (transactions.length === 0) return toast.error("Tidak ada data untuk diekspor.");
+
+        const dataToExport = transactions.map(tx => ({
+            'Order ID': tx.id,
+            'Customer': tx.customer_name,
+            'Email': tx.email,
+            'Package': tx.package_name,
+            'Amount': tx.amount,
+            'Date': new Date(tx.created_at).toLocaleDateString(),
+            'Status': tx.status
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+        XLSX.writeFile(wb, `BrewLogic_Transactions_${new Date().toISOString().split('T')[0]}.xlsx`);
+        toast.success("Excel exported successfully!");
+    };
+
+    const exportToPDF = () => {
+        if (transactions.length === 0) return toast.error("Tidak ada data untuk diekspor.");
+
+        const doc = new jsPDF();
+        doc.text("BrewLogic Transaction Report", 14, 15);
+
+        const tableColumn = ["Order ID", "Customer", "Package", "Amount", "Date", "Status"];
+        const tableRows = transactions.map(tx => [
+            tx.id,
+            tx.customer_name,
+            tx.package_name,
+            `Rp${(parseInt(tx.amount) || 0).toLocaleString()}`,
+            new Date(tx.created_at).toLocaleDateString(),
+            tx.status
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 20
+        });
+
+        doc.save(`BrewLogic_Transactions_${new Date().toISOString().split('T')[0]}.pdf`);
+        toast.success("PDF exported successfully!");
     };
 
     const handleVerifyUser = async (userId: string | number, currentPlan: string, email: string) => {
@@ -938,220 +988,76 @@ export default function AdminDashboard() {
                 {/* TRANSACTIONS TAB */}
                 {
                     activeTab === 'transactions' && (
-                        <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
-                                    <tr>
-                                        <th className="p-4">Order ID</th>
-                                        <th className="p-4">Customer</th>
-                                        <th className="p-4">Package</th>
-                                        <th className="p-4">Amount</th>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">Status</th>
-                                        <th className="p-4">Proof</th>
-                                        <th className="p-4">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-900">
-                                    {transactions.length === 0 && (
-                                        <tr><td colSpan={8} className="p-8 text-center text-zinc-500">No transactions yet.</td></tr>
-                                    )}
-                                    {transactions.map(tx => (
-                                        <tr key={tx.id} className="hover:bg-zinc-900/20">
-                                            <td className="p-4 text-xs font-mono text-zinc-400">{tx.id}</td>
-                                            <td className="p-4 font-bold">{tx.customer_name}<br /><span className="text-xs font-normal text-zinc-500">{tx.email}</span></td>
-                                            <td className="p-4">{tx.package}</td>
-                                            <td className="p-4 font-mono">Rp{(parseInt(tx.amount) || 0).toLocaleString()}</td>
-                                            <td className="p-4 text-xs text-zinc-500">{new Date(tx.date).toLocaleDateString()}</td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${tx.status === 'success' || tx.status === 'manual_success' ? 'bg-[#D4F932]/20 text-[#D4F932]' : 'bg-yellow-500/10 text-yellow-500'
-                                                    }`}>
-                                                    {tx.status}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                {tx.proof_image ? (
-                                                    <a href={tx.proof_image} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#D4F932] hover:underline text-xs">
-                                                        <Settings size={14} /> View
-                                                    </a>
-                                                ) : <span className="text-zinc-600">-</span>}
-                                            </td>
-                                            <td className="p-4 flex items-center gap-2">
-                                                {(tx.status === 'pending' || tx.status === 'manual_success' || tx.status === 'pending_payment') && (
-                                                    <button
-                                                        onClick={() => confirmTransaction(tx)}
-                                                        className="text-black bg-[#D4F932] hover:brightness-110 p-2 rounded-lg transition-colors"
-                                                        title="Confirm Payment"
-                                                    >
-                                                        <CheckCircle size={18} />
-                                                    </button>
-                                                )}
-                                                <button onClick={() => deleteItem('transactions', tx.id)} className="text-red-500 hover:text-white p-2 hover:bg-zinc-800 rounded-lg transition-colors" title="Delete Transaction">
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )
-                }
-
-                {
-                    activeTab === 'products' && (
                         <div className="space-y-6">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-xl font-bold">Membership Packages</h3>
-                                <button
-                                    onClick={() => {
-                                        setCurrentProduct(null); // Clear for new entry
-                                        setIsProductModalOpen(true);
-                                    }}
-                                    className="bg-[#D4F932] text-black px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110"
-                                >
-                                    <Plus size={18} />
-                                    Add New Package
-                                </button>
+                                <h3 className="text-xl font-bold">Transaction History</h3>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={exportToExcel}
+                                        className="bg-green-600/20 text-green-500 border border-green-600/30 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-green-600/40 transition-all"
+                                    >
+                                        <Download size={16} />
+                                        Export Excel
+                                    </button>
+                                    <button
+                                        onClick={exportToPDF}
+                                        className="bg-red-600/20 text-red-500 border border-red-600/30 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-red-600/40 transition-all"
+                                    >
+                                        <Download size={16} />
+                                        Export PDF
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
                                 <table className="w-full text-left">
                                     <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
                                         <tr>
-                                            <th className="p-4">Package ID</th>
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Price</th>
-                                            <th className="p-4">Duration</th>
-                                            <th className="p-4 hidden md:table-cell">Features</th>
+                                            <th className="p-4">Order ID</th>
+                                            <th className="p-4">Customer</th>
+                                            <th className="p-4">Package</th>
+                                            <th className="p-4">Amount</th>
+                                            <th className="p-4">Date</th>
+                                            <th className="p-4">Status</th>
+                                            <th className="p-4">Proof</th>
                                             <th className="p-4">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-900">
-                                        {products.map(p => (
-                                            <tr key={p.id} className="hover:bg-zinc-900/20">
-                                                <td className="p-4 font-mono text-zinc-400 text-xs">{p.id}</td>
-                                                <td className="p-4 font-bold text-white">
-                                                    {p.name}
-                                                    <div className="text-xs text-zinc-500 font-normal mt-1 line-clamp-1">{p.description}</div>
-                                                </td>
-                                                <td className="p-4 text-[#D4F932] font-mono">Rp{p.price.toLocaleString()}</td>
-                                                <td className="p-4 text-zinc-300 text-sm">{p.duration}</td>
-                                                <td className="p-4 hidden md:table-cell">
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {Array.isArray(p.features) && p.features.slice(0, 2).map((f: string, i: number) => (
-                                                            <span key={i} className="inline-block bg-zinc-800 text-zinc-400 text-[10px] px-2 py-0.5 rounded">
-                                                                {f}
-                                                            </span>
-                                                        ))}
-                                                        {Array.isArray(p.features) && p.features.length > 2 && (
-                                                            <span className="text-[10px] text-zinc-600 self-center">+{p.features.length - 2} more</span>
-                                                        )}
-                                                    </div>
+                                        {transactions.length === 0 && (
+                                            <tr><td colSpan={8} className="p-8 text-center text-zinc-500">No transactions yet.</td></tr>
+                                        )}
+                                        {transactions.map(tx => (
+                                            <tr key={tx.id} className="hover:bg-zinc-900/20">
+                                                <td className="p-4 text-xs font-mono text-zinc-400">{tx.id}</td>
+                                                <td className="p-4 font-bold">{tx.customer_name}<br /><span className="text-xs font-normal text-zinc-500">{tx.email}</span></td>
+                                                <td className="p-4">{tx.package}</td>
+                                                <td className="p-4 font-mono">Rp{(parseInt(tx.amount) || 0).toLocaleString()}</td>
+                                                <td className="p-4 text-xs text-zinc-500">{new Date(tx.date).toLocaleDateString()}</td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${tx.status === 'success' || tx.status === 'manual_success' ? 'bg-[#D4F932]/20 text-[#D4F932]' : 'bg-yellow-500/10 text-yellow-500'
+                                                        }`}>
+                                                        {tx.status}
+                                                    </span>
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setCurrentProduct(p);
-                                                                setIsProductModalOpen(true);
-                                                            }}
-                                                            className="text-zinc-400 hover:text-white"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
-
-                                                        <div className="flex flex-col gap-1">
-                                                            <button
-                                                                onClick={() => moveProduct(p.id, 'up')}
-                                                                className="text-zinc-500 hover:text-white disabled:opacity-30"
-                                                                disabled={products.indexOf(p) === 0}
-                                                            >
-                                                                <ArrowUp size={14} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => moveProduct(p.id, 'down')}
-                                                                className="text-zinc-500 hover:text-white disabled:opacity-30"
-                                                                disabled={products.indexOf(p) === products.length - 1}
-                                                            >
-                                                                <ArrowDown size={14} />
-                                                            </button>
-                                                        </div>
-
-                                                        <button
-                                                            onClick={() => deleteProduct(p.id)}
-                                                            className="text-red-500 hover:text-red-400"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
+                                                    {tx.proof_image ? (
+                                                        <a href={tx.proof_image} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#D4F932] hover:underline text-xs">
+                                                            <Settings size={14} /> View
+                                                        </a>
+                                                    ) : <span className="text-zinc-600">-</span>}
                                                 </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )
-                }
-
-                {/* VOUCHERS TAB */}
-                {
-                    activeTab === 'vouchers' && (
-                        <div className="space-y-6">
-                            <div className="bg-[#111] border border-zinc-800 p-6 rounded-2xl">
-                                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                                    <Plus size={18} className="text-[#D4F932]" />
-                                    Add New Voucher
-                                </h3>
-                                <form onSubmit={addVoucher} className="flex flex-col md:flex-row gap-4 items-end">
-                                    <div className="flex-1 w-full">
-                                        <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Voucher Code</label>
-                                        <input name="code" required placeholder="e.g. SUMMER50" className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white font-mono uppercase focus:border-[#D4F932] outline-none" />
-                                    </div>
-                                    <div className="w-full md:w-48">
-                                        <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Discount Type</label>
-                                        <select name="discount_type" className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white focus:border-[#D4F932] outline-none">
-                                            <option value="percentage">Percentage (%)</option>
-                                            <option value="fixed">Fixed Amount (Rp)</option>
-                                        </select>
-                                    </div>
-                                    <div className="w-full md:w-48">
-                                        <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Value</label>
-                                        <input name="discount_value" type="number" required placeholder="e.g. 50 or 50000" className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white focus:border-[#D4F932] outline-none" />
-                                    </div>
-                                    <button className="bg-[#D4F932] text-black font-bold px-6 py-3 rounded-lg hover:brightness-110 w-full md:w-auto">
-                                        Create
-                                    </button>
-                                </form>
-                            </div>
-
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
-                                <table className="w-full text-left">
-                                    <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
-                                        <tr>
-                                            <th className="p-4">Code</th>
-                                            <th className="p-4">Discount</th>
-                                            <th className="p-4">Created At</th>
-                                            <th className="p-4 text-right">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-zinc-900">
-                                        {vouchers.length === 0 && (
-                                            <tr><td colSpan={4} className="p-8 text-center text-zinc-500">No vouchers active.</td></tr>
-                                        )}
-                                        {vouchers.map(v => (
-                                            <tr key={v.id} className="hover:bg-zinc-900/20">
-                                                <td className="p-4 font-mono font-bold text-[#D4F932] text-lg">{v.code}</td>
-                                                <td className="p-4 font-bold text-white">
-                                                    {v.discount_type === 'percentage'
-                                                        ? `${v.discount_value}% OFF`
-                                                        : `Rp${v.discount_value.toLocaleString()} OFF`
-                                                    }
-                                                </td>
-                                                <td className="p-4 text-xs text-zinc-500">{new Date(v.created_at).toLocaleDateString()}</td>
-                                                <td className="p-4 text-right">
-                                                    <button onClick={() => deleteItem('vouchers', v.id)} className="text-red-500 hover:text-white p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+                                                <td className="p-4 flex items-center gap-2">
+                                                    {(tx.status === 'pending' || tx.status === 'manual_success' || tx.status === 'pending_payment') && (
+                                                        <button
+                                                            onClick={() => confirmTransaction(tx)}
+                                                            className="text-black bg-[#D4F932] hover:brightness-110 p-2 rounded-lg transition-colors"
+                                                            title="Confirm Payment"
+                                                        >
+                                                            <CheckCircle size={18} />
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => deleteItem('transactions', tx.id)} className="text-red-500 hover:text-white p-2 hover:bg-zinc-800 rounded-lg transition-colors" title="Delete Transaction">
                                                         <Trash2 size={18} />
                                                     </button>
                                                 </td>
@@ -1160,630 +1066,795 @@ export default function AdminDashboard() {
                                     </tbody>
                                 </table>
                             </div>
-                        </div>
-                    )
+                            )
                 }
 
-                {/* GRINDERS TAB */}
-                {
-                    activeTab === 'grinders' && (
-                        <div className="space-y-6">
-                            {/* Add Form */}
-                            <div className="bg-[#111] border border-zinc-800 p-6 rounded-2xl mb-6">
-                                <h3 className="font-bold mb-4 flex items-center gap-2"><Plus size={18} /> Add New Grinder</h3>
-                                <form onSubmit={addGrinder} className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                                    <input name="name" placeholder="Grinder Name" required className="md:col-span-2 bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <input name="type" placeholder="Type" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <input name="coarse" placeholder="Coarse Setting" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <input name="medium" placeholder="Medium Setting" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <input name="fine" placeholder="Fine Setting" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <button className="bg-[#D4F932] text-black font-bold p-2 rounded text-sm hover:brightness-110">Add</button>
-                                </form>
-                            </div>
+                            {
+                                activeTab === 'products' && (
+                                    <div className="space-y-6">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-xl font-bold">Membership Packages</h3>
+                                            <button
+                                                onClick={() => {
+                                                    setCurrentProduct(null); // Clear for new entry
+                                                    setIsProductModalOpen(true);
+                                                }}
+                                                className="bg-[#D4F932] text-black px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110"
+                                            >
+                                                <Plus size={18} />
+                                                Add New Package
+                                            </button>
+                                        </div>
 
-                            {/* Table */}
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
-                                <table className="w-full text-left">
-                                    <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
-                                        <tr>
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Mechanism</th>
-                                            <th className="p-4">Coarse</th>
-                                            <th className="p-4">Medium</th>
-                                            <th className="p-4">Fine</th>
-                                            <th className="p-4">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-zinc-900 border-zinc-800">
-                                        {grinders.map(g => (
-                                            <tr key={g.id} className="hover:bg-zinc-900/20 text-sm">
-                                                <td className="p-4 font-bold">{g.name}</td>
-                                                <td className="p-4 text-zinc-500">{g.type}</td>
-                                                <td className="p-4 font-mono text-zinc-400">{g.coarse}</td>
-                                                <td className="p-4 font-mono text-zinc-400">{g.medium}</td>
-                                                <td className="p-4 font-mono text-zinc-400">{g.fine}</td>
-                                                <td className="p-4">
-                                                    <button onClick={() => deleteItem('grinders', g.id)} className="text-red-500 hover:text-white">
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )
-                }
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
+                                                    <tr>
+                                                        <th className="p-4">Package ID</th>
+                                                        <th className="p-4">Name</th>
+                                                        <th className="p-4">Price</th>
+                                                        <th className="p-4">Duration</th>
+                                                        <th className="p-4 hidden md:table-cell">Features</th>
+                                                        <th className="p-4">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-900">
+                                                    {products.map(p => (
+                                                        <tr key={p.id} className="hover:bg-zinc-900/20">
+                                                            <td className="p-4 font-mono text-zinc-400 text-xs">{p.id}</td>
+                                                            <td className="p-4 font-bold text-white">
+                                                                {p.name}
+                                                                <div className="text-xs text-zinc-500 font-normal mt-1 line-clamp-1">{p.description}</div>
+                                                            </td>
+                                                            <td className="p-4 text-[#D4F932] font-mono">Rp{p.price.toLocaleString()}</td>
+                                                            <td className="p-4 text-zinc-300 text-sm">{p.duration}</td>
+                                                            <td className="p-4 hidden md:table-cell">
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {Array.isArray(p.features) && p.features.slice(0, 2).map((f: string, i: number) => (
+                                                                        <span key={i} className="inline-block bg-zinc-800 text-zinc-400 text-[10px] px-2 py-0.5 rounded">
+                                                                            {f}
+                                                                        </span>
+                                                                    ))}
+                                                                    {Array.isArray(p.features) && p.features.length > 2 && (
+                                                                        <span className="text-[10px] text-zinc-600 self-center">+{p.features.length - 2} more</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setCurrentProduct(p);
+                                                                            setIsProductModalOpen(true);
+                                                                        }}
+                                                                        className="text-zinc-400 hover:text-white"
+                                                                    >
+                                                                        <Edit2 size={16} />
+                                                                    </button>
 
-                {/* DRIPPERS TAB */}
-                {
-                    activeTab === 'drippers' && (
-                        <div className="space-y-6">
-                            {/* Add Form */}
-                            <div className="bg-[#111] border border-zinc-800 p-6 rounded-2xl mb-6">
-                                <h3 className="font-bold mb-4 flex items-center gap-2"><Plus size={18} /> Add New Dripper</h3>
-                                <form onSubmit={addDripper} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <input name="name" placeholder="Dripper Name" required className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <input name="brand" placeholder="Brand (Optional)" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <input name="type" placeholder="Type (e.g. Cone, Flat)" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
-                                    <button className="bg-[#D4F932] text-black font-bold p-2.5 rounded text-sm hover:brightness-110">Add Dripper</button>
-                                </form>
-                            </div>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <button
+                                                                            onClick={() => moveProduct(p.id, 'up')}
+                                                                            className="text-zinc-500 hover:text-white disabled:opacity-30"
+                                                                            disabled={products.indexOf(p) === 0}
+                                                                        >
+                                                                            <ArrowUp size={14} />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => moveProduct(p.id, 'down')}
+                                                                            className="text-zinc-500 hover:text-white disabled:opacity-30"
+                                                                            disabled={products.indexOf(p) === products.length - 1}
+                                                                        >
+                                                                            <ArrowDown size={14} />
+                                                                        </button>
+                                                                    </div>
 
-                            {/* Table */}
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
-                                <table className="w-full text-left">
-                                    <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
-                                        <tr>
-                                            <th className="p-4">Name</th>
-                                            <th className="p-4">Brand</th>
-                                            <th className="p-4">Type</th>
-                                            <th className="p-4">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-zinc-900 border-zinc-800">
-                                        {drippers.length === 0 && (
-                                            <tr><td colSpan={4} className="p-8 text-center text-zinc-500">No drippers found.</td></tr>
-                                        )}
-                                        {drippers.map(g => (
-                                            <tr key={g.id} className="hover:bg-zinc-900/20 text-sm">
-                                                <td className="p-4 font-bold">{g.name}</td>
-                                                <td className="p-4 text-zinc-500">{g.brand || '-'}</td>
-                                                <td className="p-4 text-zinc-400">{g.type || '-'}</td>
-                                                <td className="p-4">
-                                                    <button onClick={() => deleteItem('drippers', g.id)} className="text-red-500 hover:text-white">
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )
-                }
-                {/* CONTENT TAB */}
-                {
-                    activeTab === 'content' && siteContent && (
-                        <div className="flex flex-col lg:flex-row gap-8">
-                            {/* Sidebar for Sections */}
-                            <div className="w-full lg:w-64 space-y-2 shrink-0">
-                                {['hero', 'howItWorks', 'testimonials', 'faq', 'finalCta'].map(section => (
-                                    <button
-                                        key={section}
-                                        onClick={() => setContentSection(section)}
-                                        className={`w-full text-left px-4 py-3 rounded-lg font-bold uppercase text-xs transition-colors ${contentSection === section ? 'bg-[#D4F932] text-black' : 'bg-[#111] text-zinc-500 hover:text-white'
-                                            }`}
-                                    >
-                                        {section.replace(/([A-Z])/g, ' $1')}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Editor Area */}
-                            <div className="flex-1 bg-[#111] border border-zinc-800 p-8 rounded-2xl">
-                                <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-4">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-white capitalize">{contentSection.replace(/([A-Z])/g, ' $1')}</h3>
-                                        <p className="text-sm text-zinc-500">Edit content for this section.</p>
+                                                                    <button
+                                                                        onClick={() => deleteProduct(p.id)}
+                                                                        className="text-red-500 hover:text-red-400"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
-                                    <button
-                                        onClick={() => saveContentSection(contentSection)}
-                                        className="bg-[#D4F932] text-black font-bold px-6 py-2 rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
-                                    >
-                                        <CheckCircle size={18} /> Save Changes
-                                    </button>
-                                </div>
+                                )
+                            }
 
-                                <div className="space-y-6">
-                                    {/* Generic Text Fields */}
-                                    {Object.keys(siteContent[contentSection]).map(key => {
-                                        const value = siteContent[contentSection][key];
-                                        if (typeof value === 'string') {
-                                            return (
-                                                <div key={key}>
-                                                    <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">{key}</label>
-                                                    {key === 'subtitle' || key === 'desc' || key.includes('text') || value.length > 50 ? (
-                                                        <textarea
-                                                            value={value}
-                                                            onChange={e => handleContentChange(contentSection, key, e.target.value)}
-                                                            rows={3}
-                                                            className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-zinc-200 outline-none focus:border-[#D4F932]"
-                                                        />
-                                                    ) : (
-                                                        <input
-                                                            value={value}
-                                                            onChange={e => handleContentChange(contentSection, key, e.target.value)}
-                                                            className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white outline-none focus:border-[#D4F932]"
-                                                        />
+                            {/* VOUCHERS TAB */}
+                            {
+                                activeTab === 'vouchers' && (
+                                    <div className="space-y-6">
+                                        <div className="bg-[#111] border border-zinc-800 p-6 rounded-2xl">
+                                            <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+                                                <Plus size={18} className="text-[#D4F932]" />
+                                                Add New Voucher
+                                            </h3>
+                                            <form onSubmit={addVoucher} className="flex flex-col md:flex-row gap-4 items-end">
+                                                <div className="flex-1 w-full">
+                                                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Voucher Code</label>
+                                                    <input name="code" required placeholder="e.g. SUMMER50" className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white font-mono uppercase focus:border-[#D4F932] outline-none" />
+                                                </div>
+                                                <div className="w-full md:w-48">
+                                                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Discount Type</label>
+                                                    <select name="discount_type" className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white focus:border-[#D4F932] outline-none">
+                                                        <option value="percentage">Percentage (%)</option>
+                                                        <option value="fixed">Fixed Amount (Rp)</option>
+                                                    </select>
+                                                </div>
+                                                <div className="w-full md:w-48">
+                                                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Value</label>
+                                                    <input name="discount_value" type="number" required placeholder="e.g. 50 or 50000" className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white focus:border-[#D4F932] outline-none" />
+                                                </div>
+                                                <button className="bg-[#D4F932] text-black font-bold px-6 py-3 rounded-lg hover:brightness-110 w-full md:w-auto">
+                                                    Create
+                                                </button>
+                                            </form>
+                                        </div>
+
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
+                                                    <tr>
+                                                        <th className="p-4">Code</th>
+                                                        <th className="p-4">Discount</th>
+                                                        <th className="p-4">Created At</th>
+                                                        <th className="p-4 text-right">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-900">
+                                                    {vouchers.length === 0 && (
+                                                        <tr><td colSpan={4} className="p-8 text-center text-zinc-500">No vouchers active.</td></tr>
                                                     )}
-                                                </div>
-                                            )
-                                        }
-                                        return null;
-                                    })}
+                                                    {vouchers.map(v => (
+                                                        <tr key={v.id} className="hover:bg-zinc-900/20">
+                                                            <td className="p-4 font-mono font-bold text-[#D4F932] text-lg">{v.code}</td>
+                                                            <td className="p-4 font-bold text-white">
+                                                                {v.discount_type === 'percentage'
+                                                                    ? `${v.discount_value}% OFF`
+                                                                    : `Rp${v.discount_value.toLocaleString()} OFF`
+                                                                }
+                                                            </td>
+                                                            <td className="p-4 text-xs text-zinc-500">{new Date(v.created_at).toLocaleDateString()}</td>
+                                                            <td className="p-4 text-right">
+                                                                <button onClick={() => deleteItem('vouchers', v.id)} className="text-red-500 hover:text-white p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+                                                                    <Trash2 size={18} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )
+                            }
 
-                                    {/* Array Fields (Specific Handling) */}
-                                    {contentSection === 'howItWorks' && (
-                                        <div className="space-y-4 pt-4 border-t border-zinc-800">
-                                            <div className="flex justify-between">
-                                                <h4 className="font-bold text-white">Steps</h4>
+                            {/* GRINDERS TAB */}
+                            {
+                                activeTab === 'grinders' && (
+                                    <div className="space-y-6">
+                                        {/* Add Form */}
+                                        <div className="bg-[#111] border border-zinc-800 p-6 rounded-2xl mb-6">
+                                            <h3 className="font-bold mb-4 flex items-center gap-2"><Plus size={18} /> Add New Grinder</h3>
+                                            <form onSubmit={addGrinder} className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                                                <input name="name" placeholder="Grinder Name" required className="md:col-span-2 bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <input name="type" placeholder="Type" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <input name="coarse" placeholder="Coarse Setting" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <input name="medium" placeholder="Medium Setting" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <input name="fine" placeholder="Fine Setting" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <button className="bg-[#D4F932] text-black font-bold p-2 rounded text-sm hover:brightness-110">Add</button>
+                                            </form>
+                                        </div>
+
+                                        {/* Table */}
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
+                                                    <tr>
+                                                        <th className="p-4">Name</th>
+                                                        <th className="p-4">Mechanism</th>
+                                                        <th className="p-4">Coarse</th>
+                                                        <th className="p-4">Medium</th>
+                                                        <th className="p-4">Fine</th>
+                                                        <th className="p-4">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-900 border-zinc-800">
+                                                    {grinders.map(g => (
+                                                        <tr key={g.id} className="hover:bg-zinc-900/20 text-sm">
+                                                            <td className="p-4 font-bold">{g.name}</td>
+                                                            <td className="p-4 text-zinc-500">{g.type}</td>
+                                                            <td className="p-4 font-mono text-zinc-400">{g.coarse}</td>
+                                                            <td className="p-4 font-mono text-zinc-400">{g.medium}</td>
+                                                            <td className="p-4 font-mono text-zinc-400">{g.fine}</td>
+                                                            <td className="p-4">
+                                                                <button onClick={() => deleteItem('grinders', g.id)} className="text-red-500 hover:text-white">
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )
+                            }
+
+                            {/* DRIPPERS TAB */}
+                            {
+                                activeTab === 'drippers' && (
+                                    <div className="space-y-6">
+                                        {/* Add Form */}
+                                        <div className="bg-[#111] border border-zinc-800 p-6 rounded-2xl mb-6">
+                                            <h3 className="font-bold mb-4 flex items-center gap-2"><Plus size={18} /> Add New Dripper</h3>
+                                            <form onSubmit={addDripper} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <input name="name" placeholder="Dripper Name" required className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <input name="brand" placeholder="Brand (Optional)" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <input name="type" placeholder="Type (e.g. Cone, Flat)" className="bg-black border border-zinc-800 p-2 rounded text-sm text-white" />
+                                                <button className="bg-[#D4F932] text-black font-bold p-2.5 rounded text-sm hover:brightness-110">Add Dripper</button>
+                                            </form>
+                                        </div>
+
+                                        {/* Table */}
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-zinc-900/50 text-zinc-500 text-xs uppercase font-bold">
+                                                    <tr>
+                                                        <th className="p-4">Name</th>
+                                                        <th className="p-4">Brand</th>
+                                                        <th className="p-4">Type</th>
+                                                        <th className="p-4">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-900 border-zinc-800">
+                                                    {drippers.length === 0 && (
+                                                        <tr><td colSpan={4} className="p-8 text-center text-zinc-500">No drippers found.</td></tr>
+                                                    )}
+                                                    {drippers.map(g => (
+                                                        <tr key={g.id} className="hover:bg-zinc-900/20 text-sm">
+                                                            <td className="p-4 font-bold">{g.name}</td>
+                                                            <td className="p-4 text-zinc-500">{g.brand || '-'}</td>
+                                                            <td className="p-4 text-zinc-400">{g.type || '-'}</td>
+                                                            <td className="p-4">
+                                                                <button onClick={() => deleteItem('drippers', g.id)} className="text-red-500 hover:text-white">
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )
+                            }
+                            {/* CONTENT TAB */}
+                            {
+                                activeTab === 'content' && siteContent && (
+                                    <div className="flex flex-col lg:flex-row gap-8">
+                                        {/* Sidebar for Sections */}
+                                        <div className="w-full lg:w-64 space-y-2 shrink-0">
+                                            {['hero', 'howItWorks', 'testimonials', 'faq', 'finalCta'].map(section => (
                                                 <button
-                                                    onClick={() => {
-                                                        const newArr = [...siteContent.howItWorks.steps, { title: 'New Step', desc: 'Description' }];
-                                                        handleContentChange('howItWorks', 'steps', newArr);
-                                                    }}
-                                                    className="text-xs bg-zinc-800 px-2 py-1 rounded text-white"
-                                                >+ Add Item</button>
-                                            </div>
-                                            {siteContent.howItWorks.steps.map((step: any, i: number) => (
-                                                <div key={i} className="p-4 bg-black rounded-xl border border-zinc-800 space-y-3 relative group">
-                                                    <button
-                                                        onClick={() => {
-                                                            const newArr = siteContent.howItWorks.steps.filter((_: any, idx: number) => idx !== i);
-                                                            handleContentChange('howItWorks', 'steps', newArr);
-                                                        }}
-                                                        className="absolute top-2 right-2 text-zinc-600 hover:text-red-500"
-                                                    ><XCircle size={16} /></button>
-                                                    <input
-                                                        value={step.title}
-                                                        onChange={e => handleArrayChange('howItWorks', 'steps', i, 'title', e.target.value)}
-                                                        className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-[#D4F932] font-bold"
-                                                        placeholder="Step Title"
-                                                    />
-                                                    <textarea
-                                                        value={step.desc}
-                                                        onChange={e => handleArrayChange('howItWorks', 'steps', i, 'desc', e.target.value)}
-                                                        className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-zinc-400"
-                                                        rows={2}
-                                                        placeholder="Step Description"
-                                                    />
-                                                </div>
+                                                    key={section}
+                                                    onClick={() => setContentSection(section)}
+                                                    className={`w-full text-left px-4 py-3 rounded-lg font-bold uppercase text-xs transition-colors ${contentSection === section ? 'bg-[#D4F932] text-black' : 'bg-[#111] text-zinc-500 hover:text-white'
+                                                        }`}
+                                                >
+                                                    {section.replace(/([A-Z])/g, ' $1')}
+                                                </button>
                                             ))}
                                         </div>
-                                    )}
 
-                                    {contentSection === 'testimonials' && (
-                                        <div className="space-y-4 pt-4 border-t border-zinc-800">
-                                            <div className="flex justify-between">
-                                                <h4 className="font-bold text-white">Testimonials</h4>
+                                        {/* Editor Area */}
+                                        <div className="flex-1 bg-[#111] border border-zinc-800 p-8 rounded-2xl">
+                                            <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-4">
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-white capitalize">{contentSection.replace(/([A-Z])/g, ' $1')}</h3>
+                                                    <p className="text-sm text-zinc-500">Edit content for this section.</p>
+                                                </div>
                                                 <button
-                                                    onClick={() => {
-                                                        const newArr = [...siteContent.testimonials.items, { name: 'New User', role: 'Role', text: 'Review...' }];
-                                                        handleContentChange('testimonials', 'items', newArr);
-                                                    }}
-                                                    className="text-xs bg-zinc-800 px-2 py-1 rounded text-white"
-                                                >+ Add Item</button>
+                                                    onClick={() => saveContentSection(contentSection)}
+                                                    className="bg-[#D4F932] text-black font-bold px-6 py-2 rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                                >
+                                                    <CheckCircle size={18} /> Save Changes
+                                                </button>
                                             </div>
-                                            {siteContent.testimonials.items.map((item: any, i: number) => (
-                                                <div key={i} className="p-4 bg-black rounded-xl border border-zinc-800 space-y-2 relative group">
-                                                    <button
-                                                        onClick={() => {
-                                                            const newArr = siteContent.testimonials.items.filter((_: any, idx: number) => idx !== i);
-                                                            handleContentChange('testimonials', 'items', newArr);
-                                                        }}
-                                                        className="absolute top-2 right-2 text-zinc-600 hover:text-red-500"
-                                                    ><XCircle size={16} /></button>
 
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <input
-                                                            value={item.name}
-                                                            onChange={e => handleArrayChange('testimonials', 'items', i, 'name', e.target.value)}
-                                                            className="bg-zinc-900 border-none rounded p-2 text-sm text-white font-bold"
-                                                            placeholder="Name"
-                                                        />
-                                                        <input
-                                                            value={item.role}
-                                                            onChange={e => handleArrayChange('testimonials', 'items', i, 'role', e.target.value)}
-                                                            className="bg-zinc-900 border-none rounded p-2 text-sm text-zinc-400"
-                                                            placeholder="Role"
-                                                        />
+                                            <div className="space-y-6">
+                                                {/* Generic Text Fields */}
+                                                {Object.keys(siteContent[contentSection]).map(key => {
+                                                    const value = siteContent[contentSection][key];
+                                                    if (typeof value === 'string') {
+                                                        return (
+                                                            <div key={key}>
+                                                                <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">{key}</label>
+                                                                {key === 'subtitle' || key === 'desc' || key.includes('text') || value.length > 50 ? (
+                                                                    <textarea
+                                                                        value={value}
+                                                                        onChange={e => handleContentChange(contentSection, key, e.target.value)}
+                                                                        rows={3}
+                                                                        className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-zinc-200 outline-none focus:border-[#D4F932]"
+                                                                    />
+                                                                ) : (
+                                                                    <input
+                                                                        value={value}
+                                                                        onChange={e => handleContentChange(contentSection, key, e.target.value)}
+                                                                        className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white outline-none focus:border-[#D4F932]"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        )
+                                                    }
+                                                    return null;
+                                                })}
+
+                                                {/* Array Fields (Specific Handling) */}
+                                                {contentSection === 'howItWorks' && (
+                                                    <div className="space-y-4 pt-4 border-t border-zinc-800">
+                                                        <div className="flex justify-between">
+                                                            <h4 className="font-bold text-white">Steps</h4>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newArr = [...siteContent.howItWorks.steps, { title: 'New Step', desc: 'Description' }];
+                                                                    handleContentChange('howItWorks', 'steps', newArr);
+                                                                }}
+                                                                className="text-xs bg-zinc-800 px-2 py-1 rounded text-white"
+                                                            >+ Add Item</button>
+                                                        </div>
+                                                        {siteContent.howItWorks.steps.map((step: any, i: number) => (
+                                                            <div key={i} className="p-4 bg-black rounded-xl border border-zinc-800 space-y-3 relative group">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newArr = siteContent.howItWorks.steps.filter((_: any, idx: number) => idx !== i);
+                                                                        handleContentChange('howItWorks', 'steps', newArr);
+                                                                    }}
+                                                                    className="absolute top-2 right-2 text-zinc-600 hover:text-red-500"
+                                                                ><XCircle size={16} /></button>
+                                                                <input
+                                                                    value={step.title}
+                                                                    onChange={e => handleArrayChange('howItWorks', 'steps', i, 'title', e.target.value)}
+                                                                    className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-[#D4F932] font-bold"
+                                                                    placeholder="Step Title"
+                                                                />
+                                                                <textarea
+                                                                    value={step.desc}
+                                                                    onChange={e => handleArrayChange('howItWorks', 'steps', i, 'desc', e.target.value)}
+                                                                    className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-zinc-400"
+                                                                    rows={2}
+                                                                    placeholder="Step Description"
+                                                                />
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                    <textarea
-                                                        value={item.text}
-                                                        onChange={e => handleArrayChange('testimonials', 'items', i, 'text', e.target.value)}
-                                                        className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-zinc-300"
-                                                        rows={2}
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                                )}
 
-                                    {contentSection === 'faq' && (
-                                        <div className="space-y-4 pt-4 border-t border-zinc-800">
-                                            <div className="flex justify-between">
-                                                <h4 className="font-bold text-white">FAQ Items</h4>
-                                                <button
-                                                    onClick={() => {
-                                                        const newArr = [...siteContent.faq.items, { question: 'New Question?', answer: 'Answer here.' }];
-                                                        handleContentChange('faq', 'items', newArr);
-                                                    }}
-                                                    className="text-xs bg-zinc-800 px-2 py-1 rounded text-white"
-                                                >+ Add Item</button>
+                                                {contentSection === 'testimonials' && (
+                                                    <div className="space-y-4 pt-4 border-t border-zinc-800">
+                                                        <div className="flex justify-between">
+                                                            <h4 className="font-bold text-white">Testimonials</h4>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newArr = [...siteContent.testimonials.items, { name: 'New User', role: 'Role', text: 'Review...' }];
+                                                                    handleContentChange('testimonials', 'items', newArr);
+                                                                }}
+                                                                className="text-xs bg-zinc-800 px-2 py-1 rounded text-white"
+                                                            >+ Add Item</button>
+                                                        </div>
+                                                        {siteContent.testimonials.items.map((item: any, i: number) => (
+                                                            <div key={i} className="p-4 bg-black rounded-xl border border-zinc-800 space-y-2 relative group">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newArr = siteContent.testimonials.items.filter((_: any, idx: number) => idx !== i);
+                                                                        handleContentChange('testimonials', 'items', newArr);
+                                                                    }}
+                                                                    className="absolute top-2 right-2 text-zinc-600 hover:text-red-500"
+                                                                ><XCircle size={16} /></button>
+
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    <input
+                                                                        value={item.name}
+                                                                        onChange={e => handleArrayChange('testimonials', 'items', i, 'name', e.target.value)}
+                                                                        className="bg-zinc-900 border-none rounded p-2 text-sm text-white font-bold"
+                                                                        placeholder="Name"
+                                                                    />
+                                                                    <input
+                                                                        value={item.role}
+                                                                        onChange={e => handleArrayChange('testimonials', 'items', i, 'role', e.target.value)}
+                                                                        className="bg-zinc-900 border-none rounded p-2 text-sm text-zinc-400"
+                                                                        placeholder="Role"
+                                                                    />
+                                                                </div>
+                                                                <textarea
+                                                                    value={item.text}
+                                                                    onChange={e => handleArrayChange('testimonials', 'items', i, 'text', e.target.value)}
+                                                                    className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-zinc-300"
+                                                                    rows={2}
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {contentSection === 'faq' && (
+                                                    <div className="space-y-4 pt-4 border-t border-zinc-800">
+                                                        <div className="flex justify-between">
+                                                            <h4 className="font-bold text-white">FAQ Items</h4>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newArr = [...siteContent.faq.items, { question: 'New Question?', answer: 'Answer here.' }];
+                                                                    handleContentChange('faq', 'items', newArr);
+                                                                }}
+                                                                className="text-xs bg-zinc-800 px-2 py-1 rounded text-white"
+                                                            >+ Add Item</button>
+                                                        </div>
+                                                        {siteContent.faq.items.map((item: any, i: number) => (
+                                                            <div key={i} className="p-4 bg-black rounded-xl border border-zinc-800 space-y-2 relative">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newArr = siteContent.faq.items.filter((_: any, idx: number) => idx !== i);
+                                                                        handleContentChange('faq', 'items', newArr);
+                                                                    }}
+                                                                    className="absolute top-2 right-2 text-zinc-600 hover:text-red-500"
+                                                                ><XCircle size={16} /></button>
+                                                                <input
+                                                                    value={item.question}
+                                                                    onChange={e => handleArrayChange('faq', 'items', i, 'question', e.target.value)}
+                                                                    className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-white font-bold"
+                                                                    placeholder="Question"
+                                                                />
+                                                                <textarea
+                                                                    value={item.answer}
+                                                                    onChange={e => handleArrayChange('faq', 'items', i, 'answer', e.target.value)}
+                                                                    className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-zinc-300"
+                                                                    rows={2}
+                                                                    placeholder="Answer"
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                            {siteContent.faq.items.map((item: any, i: number) => (
-                                                <div key={i} className="p-4 bg-black rounded-xl border border-zinc-800 space-y-2 relative">
-                                                    <button
-                                                        onClick={() => {
-                                                            const newArr = siteContent.faq.items.filter((_: any, idx: number) => idx !== i);
-                                                            handleContentChange('faq', 'items', newArr);
-                                                        }}
-                                                        className="absolute top-2 right-2 text-zinc-600 hover:text-red-500"
-                                                    ><XCircle size={16} /></button>
+                                        </div>
+                                    </div>
+                                )
+                            }
+
+                            {/* PAYMENT TAB */}
+                            {activeTab === 'payment' && <PaymentSettings />}
+
+                            {/* VERIFY MODAL */}
+                            {
+                                verifyModal.open && verifyModal.user && (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-md p-8 shadow-2xl relative">
+                                            <button
+                                                onClick={() => setVerifyModal({ open: false, user: null })}
+                                                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                                            >
+                                                <XCircle size={24} />
+                                            </button>
+
+                                            <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
+                                                <ShieldCheck className="text-[#D4F932]" />
+                                                Verify User
+                                            </h2>
+                                            <p className="text-zinc-500 text-sm mb-6">Set active plan for <b>{verifyModal.user.name}</b></p>
+
+                                            <form onSubmit={handleVerifyUser} className="space-y-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Select Plan</label>
+                                                    <select name="plan" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
+                                                        <option value="Starter Brew">Starter Brew</option>
+                                                        <option value="Home Barista">Home Barista</option>
+                                                        <option value="Pro Brewer">Pro Brewer</option>
+                                                        <option value="Coffee Master">Coffee Master</option>
+                                                        <option value="Lifetime Access">Lifetime Access</option>
+                                                    </select>
+                                                </div>
+                                                <div className="text-xs text-zinc-600 bg-zinc-900/50 p-3 rounded">
+                                                    This will activate the user immediately and create a manual transaction record.
+                                                </div>
+
+                                                <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110">
+                                                    Confirm Verification
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )
+                            }
+
+                            {/* SETTINGS TAB */}
+                            {
+                                activeTab === 'settings' && (
+                                    <div className="max-w-2xl bg-[#111] border border-zinc-800 p-8 rounded-2xl">
+                                        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                                            <Settings size={20} className="text-[#D4F932]" />
+                                            Profile Settings
+                                        </h3>
+                                        <form onSubmit={updateProfile} className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div>
+                                                    <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">Username</label>
                                                     <input
-                                                        value={item.question}
-                                                        onChange={e => handleArrayChange('faq', 'items', i, 'question', e.target.value)}
-                                                        className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-white font-bold"
-                                                        placeholder="Question"
-                                                    />
-                                                    <textarea
-                                                        value={item.answer}
-                                                        onChange={e => handleArrayChange('faq', 'items', i, 'answer', e.target.value)}
-                                                        className="w-full bg-zinc-900 border-none rounded p-2 text-sm text-zinc-300"
-                                                        rows={2}
-                                                        placeholder="Answer"
+                                                        name="username"
+                                                        defaultValue={JSON.parse(localStorage.getItem('admin_user') || '{}').username}
+                                                        className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white"
                                                     />
                                                 </div>
-                                            ))}
+                                                <div>
+                                                    <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">Display Name</label>
+                                                    <input
+                                                        name="name"
+                                                        defaultValue={JSON.parse(localStorage.getItem('admin_user') || '{}').name}
+                                                        className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">New Password</label>
+                                                <input
+                                                    name="password"
+                                                    type="password"
+                                                    placeholder="Leave blank to keep current password"
+                                                    className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white"
+                                                />
+                                                <p className="text-xs text-zinc-600 mt-2">* You will need to login again after changing these details.</p>
+                                            </div>
+
+                                            <div className="pt-4 border-t border-zinc-800 flex justify-end">
+                                                <button className="bg-[#D4F932] text-black font-bold px-6 py-3 rounded-lg hover:brightness-110 flex items-center gap-2">
+                                                    <CheckCircle size={18} />
+                                                    Save Changes
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                )
+                            }
+                            {/* ADD USER MODAL */}
+                            {
+                                isAddUserModalOpen && (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative">
+                                            <button
+                                                onClick={() => setIsAddUserModalOpen(false)}
+                                                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                                            >
+                                                <XCircle size={24} />
+                                            </button>
+
+                                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                                                <UserPlus className="text-[#D4F932]" />
+                                                Add New User
+                                            </h2>
+
+                                            <form onSubmit={handleAddUser} className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Username / Email</label>
+                                                        <input name="username" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Full Name</label>
+                                                        <input name="name" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Password</label>
+                                                        <input name="password" type="password" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Phone (WA)</label>
+                                                        <input name="phone" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Role</label>
+                                                        <select name="role" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
+                                                            <option value="member">Member</option>
+                                                            <option value="admin">Admin</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Subscription Plan</label>
+                                                        <select name="plan" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
+                                                            <option value="">No Plan</option>
+                                                            <option value="Starter Brew">Starter Brew</option>
+                                                            <option value="Home Barista">Home Barista</option>
+                                                            <option value="Pro Brewer">Pro Brewer</option>
+                                                            <option value="Coffee Master">Coffee Master</option>
+                                                            <option value="Lifetime Access">Lifetime Access</option>
+                                                        </select>
+                                                        <p className="text-[10px] text-zinc-600 mt-1">* Adds manual transaction record.</p>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Manual Amount (Rp)</label>
+                                                        <input name="amount" type="number" placeholder="Enter custom price or 0" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                </div>
+
+                                                <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110 mt-4">
+                                                    Create User
+                                                </button>
+                                            </form>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )
-                }
+                                    </div >
+                                )
+                            }
 
-                {/* PAYMENT TAB */}
-                {activeTab === 'payment' && <PaymentSettings />}
+                            {/* EDIT USER MODAL */}
+                            {
+                                isEditUserModalOpen && editingUser && (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative">
+                                            <button
+                                                onClick={() => { setIsEditUserModalOpen(false); setEditingUser(null); }}
+                                                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                                            >
+                                                <XCircle size={24} />
+                                            </button>
 
-                {/* VERIFY MODAL */}
-                {
-                    verifyModal.open && verifyModal.user && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-md p-8 shadow-2xl relative">
-                                <button
-                                    onClick={() => setVerifyModal({ open: false, user: null })}
-                                    className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-                                >
-                                    <XCircle size={24} />
-                                </button>
+                                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                                                <Edit2 className="text-[#D4F932]" />
+                                                Edit User
+                                            </h2>
 
-                                <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-                                    <ShieldCheck className="text-[#D4F932]" />
-                                    Verify User
-                                </h2>
-                                <p className="text-zinc-500 text-sm mb-6">Set active plan for <b>{verifyModal.user.name}</b></p>
+                                            <form onSubmit={handleUpdateUser} className="space-y-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Username (Read-only)</label>
+                                                    <input value={editingUser.username} readOnly className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white opacity-50 cursor-not-allowed" />
+                                                </div>
 
-                                <form onSubmit={handleVerifyUser} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Select Plan</label>
-                                        <select name="plan" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
-                                            <option value="Starter Brew">Starter Brew</option>
-                                            <option value="Home Barista">Home Barista</option>
-                                            <option value="Pro Brewer">Pro Brewer</option>
-                                            <option value="Coffee Master">Coffee Master</option>
-                                            <option value="Lifetime Access">Lifetime Access</option>
-                                        </select>
-                                    </div>
-                                    <div className="text-xs text-zinc-600 bg-zinc-900/50 p-3 rounded">
-                                        This will activate the user immediately and create a manual transaction record.
-                                    </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Full Name</label>
+                                                    <input name="name" defaultValue={editingUser.name} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                </div>
 
-                                    <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110">
-                                        Confirm Verification
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )
-                }
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Role</label>
+                                                    <select name="role" defaultValue={editingUser.role} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
+                                                        <option value="member">Member</option>
+                                                        <option value="admin">Admin</option>
+                                                    </select>
+                                                </div>
 
-                {/* SETTINGS TAB */}
-                {
-                    activeTab === 'settings' && (
-                        <div className="max-w-2xl bg-[#111] border border-zinc-800 p-8 rounded-2xl">
-                            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                                <Settings size={20} className="text-[#D4F932]" />
-                                Profile Settings
-                            </h3>
-                            <form onSubmit={updateProfile} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">Username</label>
-                                        <input
-                                            name="username"
-                                            defaultValue={JSON.parse(localStorage.getItem('admin_user') || '{}').username}
-                                            className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">Display Name</label>
-                                        <input
-                                            name="name"
-                                            defaultValue={JSON.parse(localStorage.getItem('admin_user') || '{}').name}
-                                            className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white"
-                                        />
-                                    </div>
-                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Subscription Plan</label>
+                                                    <select name="plan" defaultValue={editingUser.plan || ''} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
+                                                        <option value="">No Plan</option>
+                                                        <option value="Starter Brew">Starter Brew</option>
+                                                        <option value="Home Barista">Home Barista</option>
+                                                        <option value="Pro Brewer">Pro Brewer</option>
+                                                        <option value="Coffee Master">Coffee Master</option>
+                                                        <option value="Lifetime Access">Lifetime Access</option>
+                                                        {/* Allow keeping existing custom/pending plans not in list */}
+                                                        {(!['', 'Starter Brew', 'Home Barista', 'Pro Brewer', 'Coffee Master', 'Lifetime Access'].includes(editingUser.plan || '')) && (
+                                                            <option value={editingUser.plan}>{editingUser.plan}</option>
+                                                        )}
+                                                    </select>
+                                                </div>
 
-                                <div>
-                                    <label className="text-xs text-zinc-500 uppercase font-bold block mb-2">New Password</label>
-                                    <input
-                                        name="password"
-                                        type="password"
-                                        placeholder="Leave blank to keep current password"
-                                        className="w-full bg-black border border-zinc-800 p-3 rounded-lg text-white"
-                                    />
-                                    <p className="text-xs text-zinc-600 mt-2">* You will need to login again after changing these details.</p>
-                                </div>
-
-                                <div className="pt-4 border-t border-zinc-800 flex justify-end">
-                                    <button className="bg-[#D4F932] text-black font-bold px-6 py-3 rounded-lg hover:brightness-110 flex items-center gap-2">
-                                        <CheckCircle size={18} />
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    )
-                }
-                {/* ADD USER MODAL */}
-                {
-                    isAddUserModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative">
-                                <button
-                                    onClick={() => setIsAddUserModalOpen(false)}
-                                    className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-                                >
-                                    <XCircle size={24} />
-                                </button>
-
-                                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                                    <UserPlus className="text-[#D4F932]" />
-                                    Add New User
-                                </h2>
-
-                                <form onSubmit={handleAddUser} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Username / Email</label>
-                                            <input name="username" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110 mt-4">
+                                                    Update User
+                                                </button>
+                                            </form>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Full Name</label>
-                                            <input name="name" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                    </div>
+                                    </div >
+                                )
+                            }
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Password</label>
-                                            <input name="password" type="password" required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Phone (WA)</label>
-                                            <input name="phone" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                    </div>
+                            {/* PRODUCT MODAL */}
+                            {
+                                isProductModalOpen && (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                                        <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                                            <button
+                                                onClick={() => setIsProductModalOpen(false)}
+                                                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                                            >
+                                                <XCircle size={24} />
+                                            </button>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Role</label>
-                                            <select name="role" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
-                                                <option value="member">Member</option>
-                                                <option value="admin">Admin</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Subscription Plan</label>
-                                            <select name="plan" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
-                                                <option value="">No Plan</option>
-                                                <option value="Starter Brew">Starter Brew</option>
-                                                <option value="Home Barista">Home Barista</option>
-                                                <option value="Pro Brewer">Pro Brewer</option>
-                                                <option value="Coffee Master">Coffee Master</option>
-                                                <option value="Lifetime Access">Lifetime Access</option>
-                                            </select>
-                                            <p className="text-[10px] text-zinc-600 mt-1">* Adds manual transaction record.</p>
-                                        </div>
-                                        <div className="col-span-2">
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Manual Amount (Rp)</label>
-                                            <input name="amount" type="number" placeholder="Enter custom price or 0" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                    </div>
+                                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                                                <Coffee className="text-[#D4F932]" />
+                                                {currentProduct ? 'Edit Package' : 'Add New Package'}
+                                            </h2>
 
-                                    <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110 mt-4">
-                                        Create User
-                                    </button>
-                                </form>
-                            </div>
-                        </div >
-                    )
-                }
+                                            <form onSubmit={handleSaveProduct} className="space-y-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Package ID (Slug)</label>
+                                                    <input
+                                                        name="id"
+                                                        defaultValue={currentProduct?.id || ''}
+                                                        required
+                                                        placeholder="e.g. pro-brewer"
+                                                        readOnly={!!currentProduct} // ID is immutable when editing
+                                                        className={`w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none ${currentProduct ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    />
+                                                </div>
 
-                {/* EDIT USER MODAL */}
-                {
-                    isEditUserModalOpen && editingUser && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative">
-                                <button
-                                    onClick={() => { setIsEditUserModalOpen(false); setEditingUser(null); }}
-                                    className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-                                >
-                                    <XCircle size={24} />
-                                </button>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Package Name</label>
+                                                        <input name="name" defaultValue={currentProduct?.name || ''} required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Price (IDR)</label>
+                                                        <input name="price" type="number" defaultValue={currentProduct?.price || ''} required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                </div>
 
-                                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                                    <Edit2 className="text-[#D4F932]" />
-                                    Edit User
-                                </h2>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Duration Label</label>
+                                                    <input name="duration" defaultValue={currentProduct?.duration || ''} placeholder="e.g. Billed Monthly" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                </div>
 
-                                <form onSubmit={handleUpdateUser} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Username (Read-only)</label>
-                                        <input value={editingUser.username} readOnly className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white opacity-50 cursor-not-allowed" />
-                                    </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label>
+                                                    <textarea name="description" defaultValue={currentProduct?.description || ''} rows={2} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Full Name</label>
-                                        <input name="name" defaultValue={editingUser.name} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                    </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Monthly Price (Opt)</label>
+                                                        <input name="monthly_price" type="number" defaultValue={currentProduct?.monthly_price || ''} placeholder="Auto-calc if empty" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Savings Text (Opt)</label>
+                                                        <input name="savings_text" defaultValue={currentProduct?.savings_text || ''} placeholder="e.g. Hemat 33%" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                    </div>
+                                                </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Role</label>
-                                        <select name="role" defaultValue={editingUser.role} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
-                                            <option value="member">Member</option>
-                                            <option value="admin">Admin</option>
-                                        </select>
-                                    </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Promo Text (Opt)</label>
+                                                    <input name="promo_text" defaultValue={currentProduct?.promo_text || ''} placeholder="e.g. Bonus Ebook" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Subscription Plan</label>
-                                        <select name="plan" defaultValue={editingUser.plan || ''} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none">
-                                            <option value="">No Plan</option>
-                                            <option value="Starter Brew">Starter Brew</option>
-                                            <option value="Home Barista">Home Barista</option>
-                                            <option value="Pro Brewer">Pro Brewer</option>
-                                            <option value="Coffee Master">Coffee Master</option>
-                                            <option value="Lifetime Access">Lifetime Access</option>
-                                            {/* Allow keeping existing custom/pending plans not in list */}
-                                            {(!['', 'Starter Brew', 'Home Barista', 'Pro Brewer', 'Coffee Master', 'Lifetime Access'].includes(editingUser.plan || '')) && (
-                                                <option value={editingUser.plan}>{editingUser.plan}</option>
-                                            )}
-                                        </select>
-                                    </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (One per line)</label>
+                                                    <textarea
+                                                        name="features"
+                                                        defaultValue={currentProduct?.features ? currentProduct.features.join('\n') : ''}
+                                                        rows={5}
+                                                        placeholder="AI Recipe Generation&#10;Unlimited Saves&#10;Priority Support"
+                                                        className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none font-mono text-sm"
+                                                    />
+                                                </div>
 
-                                    <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110 mt-4">
-                                        Update User
-                                    </button>
-                                </form>
-                            </div>
-                        </div >
-                    )
-                }
+                                                <div className="flex items-center gap-3 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="is_best_seller"
+                                                        id="is_best_seller"
+                                                        defaultChecked={currentProduct?.is_best_seller}
+                                                        className="w-5 h-5 rounded border-zinc-700 bg-black text-[#D4F932] focus:ring-[#D4F932]"
+                                                    />
+                                                    <label htmlFor="is_best_seller" className="text-sm font-bold text-zinc-300 cursor-pointer">Set as Best Seller</label>
+                                                </div>
 
-                {/* PRODUCT MODAL */}
-                {
-                    isProductModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                            <div className="bg-[#111] border border-zinc-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-                                <button
-                                    onClick={() => setIsProductModalOpen(false)}
-                                    className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-                                >
-                                    <XCircle size={24} />
-                                </button>
-
-                                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                                    <Coffee className="text-[#D4F932]" />
-                                    {currentProduct ? 'Edit Package' : 'Add New Package'}
-                                </h2>
-
-                                <form onSubmit={handleSaveProduct} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Package ID (Slug)</label>
-                                        <input
-                                            name="id"
-                                            defaultValue={currentProduct?.id || ''}
-                                            required
-                                            placeholder="e.g. pro-brewer"
-                                            readOnly={!!currentProduct} // ID is immutable when editing
-                                            className={`w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none ${currentProduct ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Package Name</label>
-                                            <input name="name" defaultValue={currentProduct?.name || ''} required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Price (IDR)</label>
-                                            <input name="price" type="number" defaultValue={currentProduct?.price || ''} required className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
+                                                <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110 mt-4">
+                                                    {currentProduct ? 'Save Changes' : 'Create Package'}
+                                                </button>
+                                            </form>
                                         </div>
                                     </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Duration Label</label>
-                                        <input name="duration" defaultValue={currentProduct?.duration || ''} placeholder="e.g. Billed Monthly" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label>
-                                        <textarea name="description" defaultValue={currentProduct?.description || ''} rows={2} className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Monthly Price (Opt)</label>
-                                            <input name="monthly_price" type="number" defaultValue={currentProduct?.monthly_price || ''} placeholder="Auto-calc if empty" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Savings Text (Opt)</label>
-                                            <input name="savings_text" defaultValue={currentProduct?.savings_text || ''} placeholder="e.g. Hemat 33%" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Promo Text (Opt)</label>
-                                        <input name="promo_text" defaultValue={currentProduct?.promo_text || ''} placeholder="e.g. Bonus Ebook" className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none" />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (One per line)</label>
-                                        <textarea
-                                            name="features"
-                                            defaultValue={currentProduct?.features ? currentProduct.features.join('\n') : ''}
-                                            rows={5}
-                                            placeholder="AI Recipe Generation&#10;Unlimited Saves&#10;Priority Support"
-                                            className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-white focus:border-[#D4F932] outline-none font-mono text-sm"
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center gap-3 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
-                                        <input
-                                            type="checkbox"
-                                            name="is_best_seller"
-                                            id="is_best_seller"
-                                            defaultChecked={currentProduct?.is_best_seller}
-                                            className="w-5 h-5 rounded border-zinc-700 bg-black text-[#D4F932] focus:ring-[#D4F932]"
-                                        />
-                                        <label htmlFor="is_best_seller" className="text-sm font-bold text-zinc-300 cursor-pointer">Set as Best Seller</label>
-                                    </div>
-
-                                    <button className="w-full bg-[#D4F932] text-black font-bold py-3 rounded-lg hover:brightness-110 mt-4">
-                                        {currentProduct ? 'Save Changes' : 'Create Package'}
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )
-                }
-            </main >
+                                )
+                            }
+                        </main >
         </div >
     );
 }
