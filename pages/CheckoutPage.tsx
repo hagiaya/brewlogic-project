@@ -165,11 +165,12 @@ export default function CheckoutPage() {
             sendOrderEmail({
                 name: formData.name,
                 email: formData.email,
-                orderId: data.order_id,
-                packageName: pkgName,
+                order_id: data.order_id,
+                package_name: pkgName,
                 amount: finalTotal,
-                paymentMethod: paymentMethod,
-                paymentUrl: data.payment_url || data.redirect_url
+                payment_method: paymentMethod,
+                status: paymentMethod === 'manual' ? 'Menunggu Konfirmasi' : 'Link Pembayaran Terkirim',
+                payment_link: data.payment_url || data.redirect_url
             });
 
             if (data.is_manual) {
