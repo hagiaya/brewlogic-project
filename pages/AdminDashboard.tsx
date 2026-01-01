@@ -154,10 +154,62 @@ export default function AdminDashboard() {
         }
     };
 
+    const confirmTransaction = async (tx: any) => {
+        if (!confirm("Konfirmasi pembayaran ini valid?")) return;
+
+        try {
+            // 1. Update Transaction
+            const { error: txError } = await supabase.from('transactions')
+                .update({ status: 'success' })
+                .eq('id', tx.id);
+
+            if (txError) throw txError;
+
+            // 2. Activate User Plan
+            // Find user by email
+            const { data: user } = await supabase.from('users').select('*').eq('email', tx.email).single();
+
+            if (user) {
+                // Logic to set plan
+                const newPlan = tx.package_name || user.plan || 'Starter Plan';
+                const cleanPlan = newPlan.replace('PENDING_', '');
+
+                // Calculate Expiry
+                const now = new Date();
+                const expiry = new Date();
+                const p = cleanPlan.toLowerCase();
+
+                if (p.includes("starter")) expiry.setMonth(expiry.getMonth() + 1);
+                else if (p.includes("home")) expiry.setMonth(expiry.getMonth() + 3);
+                else if (p.includes("pro")) expiry.setMonth(expiry.getMonth() + 6);
+                else if (p.includes("master")) expiry.setFullYear(expiry.getFullYear() + 1);
+                else if (p.includes("lifetime")) expiry.setFullYear(expiry.getFullYear() + 100);
+                else expiry.setMonth(expiry.getMonth() + 1);
+
+                await supabase.from('users').update({
+                    plan: cleanPlan,
+                    subscription_start: now.toISOString(),
+                    subscription_end: expiry.toISOString()
+                }).eq('id', user.id);
+
+                toast.success("Transaksi Valid! Plan User Aktif.");
+            } else {
+                toast.success("Transaksi Dikonfirmasi (User tidak ditemukan)");
+            }
+
+            setRefresh(prev => prev + 1);
+
+        } catch (error: any) {
+            toast.error("Gagal konfirmasi: " + error.message);
+        }
+    };
+
     const handleEditUser = (user: any) => {
         setEditingUser(user);
         setIsEditUserModalOpen(true);
     };
+
+
 
     const handleUpdateUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -917,8 +969,17 @@ export default function AdminDashboard() {
                                                     </a>
                                                 ) : <span className="text-zinc-600">-</span>}
                                             </td>
-                                            <td className="p-4">
-                                                <button onClick={() => deleteItem('transactions', tx.id)} className="text-red-500 hover:text-white" title="Delete Transaction">
+                                            <td className="p-4 flex items-center gap-2">
+                                                {(tx.status === 'pending' || tx.status === 'manual_success' || tx.status === 'pending_payment') && (
+                                                    <button
+                                                        onClick={() => confirmTransaction(tx)}
+                                                        className="text-black bg-[#D4F932] hover:brightness-110 p-2 rounded-lg transition-colors"
+                                                        title="Confirm Payment"
+                                                    >
+                                                        <CheckCircle size={18} />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => deleteItem('transactions', tx.id)} className="text-red-500 hover:text-white p-2 hover:bg-zinc-800 rounded-lg transition-colors" title="Delete Transaction">
                                                     <Trash2 size={18} />
                                                 </button>
                                             </td>
