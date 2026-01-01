@@ -106,7 +106,10 @@ export default function MemberLogin() {
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Password</label>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-bold text-zinc-500 uppercase block">Password</label>
+                                <Link to="/forgot-password" size="sm" className="text-[10px] text-[#D4F932] hover:underline font-bold">Lupa Password?</Link>
+                            </div>
                             <input
                                 type="password"
                                 value={formData.password}
