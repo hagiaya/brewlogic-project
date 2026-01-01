@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { Trash, Plus, CreditCard, Upload, Zap, ShieldCheck, CheckCircle } from 'lucide-react';
+import { Trash, Plus, CreditCard, Upload, Zap, ShieldCheck, CheckCircle, Edit } from 'lucide-react';
 import { useToast } from '../components/Toast';
 
 export default function PaymentSettings() {
@@ -9,6 +9,7 @@ export default function PaymentSettings() {
     const [qrisUrl, setQrisUrl] = useState('');
     const [paymentSettings, setPaymentSettings] = useState<any>(null);
     const toast = useToast();
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [newBank, setNewBank] = useState({
         bank_name: '',
@@ -98,6 +99,28 @@ export default function PaymentSettings() {
         fetchBanks();
     };
 
+    const handleDeleteQris = async () => {
+        if (!confirm("Hapus gambar QRIS?")) return;
+        setLoading(true);
+        try {
+            // Update Config to remove URL
+            const { error: configError } = await supabase.from('site_config').upsert({
+                key: 'qris_image',
+                value: { url: '' }
+            });
+
+            if (configError) throw configError;
+
+            setQrisUrl('');
+            toast.success("QRIS Removed!");
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Delete failed: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleUploadQris = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
@@ -105,9 +128,6 @@ export default function PaymentSettings() {
 
         setLoading(true);
         try {
-            // Upload to 'receipts' or 'content' bucket? Let's use receipts for simplicity as we made it public
-            // or 'public' bucket if exists.
-
             // Assume 'receipts' bucket exists from setup
             const { data, error } = await supabase.storage.from('receipts').upload(fileName, file);
 
@@ -200,26 +220,55 @@ export default function PaymentSettings() {
                         Upload QRIS
                     </h2>
 
-                    <div className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-2xl p-8 hover:border-[#D4F932] transition-colors bg-black group relative overflow-hidden">
+                    <div className="border-2 border-dashed border-zinc-800 rounded-2xl p-6 bg-black flex flex-col items-center justify-center min-h-[250px] relative transition-colors hover:border-zinc-700">
                         {qrisUrl ? (
-                            <img src={qrisUrl} alt="QRIS" className="max-w-[200px] mb-4 rounded-lg" />
+                            <div className="flex flex-col items-center w-full">
+                                <img src={qrisUrl} alt="QRIS" className="max-w-[200px] max-h-[200px] mb-6 rounded-lg object-contain bg-white p-2" />
+                                <div className="flex gap-3 w-full">
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium text-sm"
+                                    >
+                                        <Edit size={16} /> Ganti
+                                    </button>
+                                    <button
+                                        onClick={handleDeleteQris}
+                                        className="flex-1 bg-red-900/30 hover:bg-red-900/50 text-red-500 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium text-sm border border-red-900/50"
+                                    >
+                                        <Trash size={16} /> Hapus
+                                    </button>
+                                </div>
+                            </div>
                         ) : (
-                            <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center mb-4 text-zinc-600 group-hover:text-[#D4F932]">
-                                <Upload size={32} />
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex flex-col items-center justify-center w-full h-full cursor-pointer group py-8"
+                            >
+                                <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 text-zinc-600 group-hover:text-[#D4F932] group-hover:scale-110 transition-all">
+                                    <Upload size={32} />
+                                </div>
+                                <p className="text-zinc-400 font-bold mb-1 group-hover:text-white">Upload QRIS</p>
+                                <p className="text-zinc-600 text-xs">Klik untuk pilih gambar (PNG/JPG)</p>
                             </div>
                         )}
 
-                        <p className="text-zinc-500 mb-2 text-sm">Upload gambar QRIS (PNG/JPG)</p>
                         <input
                             type="file"
+                            ref={fileInputRef}
                             accept="image/*"
                             onChange={handleUploadQris}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            className="hidden"
                         />
-                        {loading && <p className="text-[#D4F932] text-xs animate-pulse">Uploading...</p>}
+                        {loading && (
+                            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded-2xl z-10 backdrop-blur-sm">
+                                <Upload className="animate-bounce text-[#D4F932] mb-2" size={32} />
+                                <p className="text-[#D4F932] text-sm font-bold">Uploading...</p>
+                            </div>
+                        )}
                     </div>
+
                     <p className="text-xs text-zinc-500 mt-4 text-center">
-                        QRIS ini akan ditampilkan kepada user saat memilih pembayaran manual.
+                        QRIS ini akan ditampilkan kepada user di halaman pembayaran (Manual Transfer).
                     </p>
                 </div>
             </div>
