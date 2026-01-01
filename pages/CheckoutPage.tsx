@@ -5,6 +5,7 @@ import { Sparkles, ArrowLeft, CreditCard, CheckCircle, Loader2, ArrowRight, Smar
 import { trackEvent } from '../utils/pixel';
 import { supabase } from '../utils/supabaseClient';
 import { useToast } from '../components/Toast';
+import { sendOrderEmail } from '../utils/emailService';
 
 
 
@@ -155,8 +156,21 @@ export default function CheckoutPage() {
                 })
             });
 
+
+
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
+
+            // SEND EMAIL NOTIFICATION (Async - don't block flow)
+            sendOrderEmail({
+                name: formData.name,
+                email: formData.email,
+                orderId: data.order_id,
+                packageName: pkgName,
+                amount: finalTotal,
+                paymentMethod: paymentMethod,
+                paymentUrl: data.payment_url || data.redirect_url
+            });
 
             if (data.is_manual) {
                 // SUCCESS MANUAL
