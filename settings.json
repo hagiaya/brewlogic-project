@@ -1,0 +1,13 @@
+{
+  "payment": {
+    "isProduction": false,
+    "sandbox": {
+      "serverKey": "",
+      "clientKey": ""
+    },
+    "production": {
+      "serverKey": "",
+      "clientKey": ""
+    }
+  }
+}

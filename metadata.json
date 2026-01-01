@@ -1,0 +1,5 @@
+{
+  "name": "BrewLogic brewing Recipe",
+  "description": "AI-assisted coffee brewing recipe generator creating optimized brewing variables based on bean identity and environment.",
+  "requestFramePermissions": []
+}
