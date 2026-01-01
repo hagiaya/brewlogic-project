@@ -6,9 +6,11 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
+dotenv.config({ path: '.env.local' }); // Also load .env.local for local secrets
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const SERVER_START_TIME = new Date().toISOString();
 
 // Supabase Setup
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -36,10 +38,26 @@ if (!supabaseUrl || !supabaseKey) {
     }
 }
 
+
+// Admin Client (Service Role) - For bypassing RLS
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+let supabaseAdmin = supabase; // Default to anon if no service key (will fail RLS)
+if (supabaseServiceKey) {
+    try {
+        supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+        console.log("[INFO] Supabase Admin Client Initialized (RLS Bypass Enabled)");
+    } catch (e) {
+        console.warn("[WARN] Failed to init Supabase Admin:", e);
+    }
+} else {
+    console.warn("[WARN] SUPABASE_SERVICE_ROLE_KEY missing. Password resets might fail if RLS is enabled.");
+}
+
+
 app.use(cors());
 app.use(express.json());
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log(`[${new Date().toISOString()}] API Request: ${req.method} ${req.url}`);
     next();
 });
 
@@ -422,13 +440,18 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const { email } = req.body;
 
     try {
+        console.log(`[INFO] Forgot Password Request for: ${email}`);
+
         // 1. Check User (Check both email and username columns)
         const { data: user, error: userErr } = await supabase.from('users')
             .select('name, username, email')
             .or(`email.eq.${email},username.eq.${email}`)
             .maybeSingle();
 
-        if (!user) return res.status(404).json({ error: "Email/Username tidak terdaftar" });
+        if (!user) {
+            console.log(`[WARN] User not found for: ${email}`);
+            return res.status(400).json({ error: "Email/Username tidak terdaftar" });
+        }
 
         // Use the actual email from DB if available, otherwise use input
         const targetEmail = user.email || user.username;
@@ -455,6 +478,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             service_id: process.env.VITE_EMAILJS_SERVICE_ID,
             template_id: process.env.VITE_EMAILJS_TEMPLATE_ID,
             user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
+            accessToken: process.env.EMAILJS_PRIVATE_KEY, // REQUIRED for non-browser/server-side requests
             template_params: {
                 to_name: user.name || "User",
                 to_email: targetEmail,
@@ -522,11 +546,29 @@ app.post('/api/auth/reset-password', async (req, res) => {
         }
 
         // Update Password
-        const { error } = await supabase.from('users')
+        const isAdmin = supabaseAdmin !== supabase;
+        console.log(`[INFO] Resetting password for: ${email}. Privileged (Admin) Client: ${isAdmin}`);
+
+        if (!isAdmin) {
+            console.warn("[WARN] Using standard Supabase client. Update will fail if RLS is enabled for 'users' table. Please set SUPABASE_SERVICE_ROLE_KEY.");
+        }
+
+        // Use supabaseAdmin to bypass RLS policies
+        // CRITICAL FIX: Match against email OR username, because 'email' variable might hold a username
+        const { data: updateData, error, count } = await supabaseAdmin.from('users')
             .update({ password: newPassword }) // In real app, HASH THIS! 
-            .eq('email', email);
+            .or(`email.eq.${email},username.eq.${email}`)
+            .select(); // Select to verify return
 
         if (error) throw error;
+
+        // Check if any row was actually updated
+        if (!updateData || updateData.length === 0) {
+            console.error(`[ERROR] Reset Password Failed: No user found for '${email}' (or RLS blocked update)`);
+            return res.status(400).json({ error: "Gagal update password. User tidak ditemukan atau server permission denied." });
+        }
+
+        console.log(`[SUCCESS] Password updated for ${email}`);
 
         // Clean up OTP
         await supabase.from('otp_codes').delete().eq('email', email);
@@ -535,6 +577,49 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// MEMBER LOGIN
+app.post('/api/member-login', async (req, res) => {
+    const { username, password } = req.body;
+    console.log(`[LOGIN START] Attempting login for: ${username}`);
+
+    try {
+        // 1. Find User by Username OR Email first (without password check)
+        const { data: user, error } = await supabase.from('users')
+            .select('*')
+            .or(`username.eq.${username},email.eq.${username}`)
+            .maybeSingle();
+
+        if (error) {
+            console.error("Login DB Error:", error);
+            return res.status(500).json({ error: "Database error during login" });
+        }
+
+        if (!user) {
+            console.log(`[LOGIN FAILED] User not found: ${username}`);
+            return res.status(401).json({ error: "Username atau email tidak terdaftar" });
+        }
+
+        // 2. Check Password
+        // Trimming inputs to avoid subtle whitespace issues
+        if (user.password !== password && user.password !== password.trim()) {
+            console.log(`[LOGIN FAILED] Password mismatch for: ${username}`);
+            // Diagnostic log to see what's happening (remove in production)
+            console.log(`[DEBUG] Input Password len: ${password.length}, DB Password len: ${user.password ? user.password.length : 0}`);
+            return res.status(401).json({ error: "Password salah" });
+        }
+
+        console.log(`[LOGIN SUCCESS] User logged in: ${user.username}`);
+
+        // Return user info (no sensitive data)
+        const { password: _, ...userData } = user;
+        res.json({ success: true, user: userData });
+
+    } catch (err) {
+        console.error("Login Exception:", err);
+        res.status(500).json({ error: "Login failed system error" });
     }
 });
 
@@ -698,6 +783,7 @@ app.put('/api/content/:section', async (req, res) => {
 
 // Catch-all 404 for API routes to always return JSON (fixes "Unexpected token <")
 app.use('/api/*path', (req, res) => {
+    console.log(`[404] Route Not Found: ${req.originalUrl}`);
     res.status(404).json({ error: `Route ${req.originalUrl} not found on this server.` });
 });
 
@@ -708,6 +794,8 @@ export default app;
 if (!process.env.VERCEL) {
     app.listen(PORT, () => {
         console.log(`[OK] API Server started on port ${PORT}`);
+        console.log(`[INFO] Server ID (Start Time): ${SERVER_START_TIME}`);
+        console.log(`[INFO] EmailJS Private Key: ${process.env.EMAILJS_PRIVATE_KEY ? (process.env.EMAILJS_PRIVATE_KEY.substring(0, 4) + '...') : 'MISSING (Required for Strict Mode)'}`);
         console.log(`[OK] Mode: ${process.env.XENDIT_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'}`);
     }).on('error', (err) => {
         console.error('[ERROR] Server failed to start:', err.message);
