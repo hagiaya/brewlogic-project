@@ -12,6 +12,7 @@ alter table users add column if not exists plan text;
 alter table users add column if not exists subscription_start timestamp with time zone;
 alter table users add column if not exists subscription_end timestamp with time zone;
 alter table users add column if not exists phone text;
+alter table users add column if not exists email text;
 
 -- 3. OTP Codes Table (Just in case you haven't run previous step)
 create table if not exists otp_codes (

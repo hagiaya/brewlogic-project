@@ -422,9 +422,16 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const { email } = req.body;
 
     try {
-        // 1. Check User
-        const { data: user } = await supabase.from('users').select('name').eq('email', email).maybeSingle();
-        if (!user) return res.status(404).json({ error: "Email tidak terdaftar" });
+        // 1. Check User (Check both email and username columns)
+        const { data: user, error: userErr } = await supabase.from('users')
+            .select('name, username, email')
+            .or(`email.eq.${email},username.eq.${email}`)
+            .maybeSingle();
+
+        if (!user) return res.status(404).json({ error: "Email/Username tidak terdaftar" });
+
+        // Use the actual email from DB if available, otherwise use input
+        const targetEmail = user.email || user.username;
 
         // 2. Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -432,10 +439,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
         // 3. Save OTP
         // Delete old OTPs first
-        await supabase.from('otp_codes').delete().eq('email', email);
+        await supabase.from('otp_codes').delete().or(`email.eq.${targetEmail},email.eq.${email}`);
 
         const { error: dbError } = await supabase.from('otp_codes').insert({
-            email,
+            email: targetEmail,
             otp_code: otp,
             expires_at: expiresAt
         });
@@ -450,7 +457,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
             user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
             template_params: {
                 to_name: user.name || "User",
-                to_email: email,
+                to_email: targetEmail,
                 subject: "Reset Password OTP",
                 message: `Kode OTP Anda adalah: ${otp}`,
                 action_url: "",
@@ -575,8 +582,10 @@ app.post('/api/users', async (req, res) => {
 
         const { data, error } = await supabase.from('users').insert([{
             username,
+            email: email || username,
             password, // In prod, hash this! But maintaining existing flow.
             name,
+            phone,
             role: role || 'member',
             plan,
             subscription_start: subStart,
