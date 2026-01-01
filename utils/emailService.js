@@ -78,3 +78,23 @@ export const sendPasswordReset = async (email, name, link) => {
         action_text: "Reset Password"
     });
 };
+// 4. ACTIVATION EMAIL (Account Active)
+export const sendActivationEmail = async (email, name, planName, expiryDate) => {
+    const message = `
+        Selamat! Pembayaran Anda telah kami terima dan akun BrewLogic Anda kini telah AKTIF.
+        
+        Paket: ${planName}
+        Berlaku sampai: ${new Date(expiryDate).toLocaleDateString('id-ID', { dateStyle: 'long' })}
+        
+        Silakan login ke aplikasi untuk mulai menikmati fitur BrewLogic.
+    `;
+
+    return await sendEmailGeneric({
+        to_name: name || "User",
+        to_email: email,
+        subject: "Akun BrewLogic Anda Telah Aktif!",
+        message: message,
+        action_url: `${window.location.origin}/login`,
+        action_text: "Login Sekarang"
+    });
+};

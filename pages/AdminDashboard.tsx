@@ -7,6 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { useToast } from '../components/Toast';
+import { sendActivationEmail } from '../utils/emailService';
 import PaymentSettings from './PaymentSettings';
 
 export default function AdminDashboard() {
@@ -146,6 +147,9 @@ export default function AdminDashboard() {
                     .eq('id', recentTx.id);
             }
 
+            // 3. Send Notification Email
+            sendActivationEmail(email, user.name, newPlan, expiry.toISOString());
+
             toast.success(`User verified! Plan active: ${newPlan}`);
             setRefresh(prev => prev + 1);
 
@@ -191,6 +195,9 @@ export default function AdminDashboard() {
                     subscription_start: now.toISOString(),
                     subscription_end: expiry.toISOString()
                 }).eq('id', user.id);
+
+                // 3. Send Notification Email
+                sendActivationEmail(tx.email, user.name, cleanPlan, expiry.toISOString());
 
                 toast.success("Transaksi Valid! Plan User Aktif.");
             } else {
