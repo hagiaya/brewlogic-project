@@ -416,6 +416,121 @@ app.post('/api/transaction-success', async (req, res) => {
     res.json({ success: true });
 });
 
+
+// FORGOT PASSWORD
+app.post('/api/auth/forgot-password', async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        // 1. Check User
+        const { data: user } = await supabase.from('users').select('name').eq('email', email).maybeSingle();
+        if (!user) return res.status(404).json({ error: "Email tidak terdaftar" });
+
+        // 2. Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 5 * 60000).toISOString(); // 5 mins
+
+        // 3. Save OTP
+        // Delete old OTPs first
+        await supabase.from('otp_codes').delete().eq('email', email);
+
+        const { error: dbError } = await supabase.from('otp_codes').insert({
+            email,
+            otp_code: otp,
+            expires_at: expiresAt
+        });
+
+        if (dbError) throw dbError;
+
+        // 4. Send Email (via EmailJS REST API)
+        // Note: Using REST API because we are on server
+        const emailData = {
+            service_id: process.env.VITE_EMAILJS_SERVICE_ID,
+            template_id: process.env.VITE_EMAILJS_TEMPLATE_ID,
+            user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
+            template_params: {
+                to_name: user.name || "User",
+                to_email: email,
+                subject: "Reset Password OTP",
+                message: `Kode OTP Anda adalah: ${otp}`,
+                action_url: "",
+                action_text: ""
+            }
+        };
+
+        const emailRes = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(emailData)
+        });
+
+        if (!emailRes.ok) {
+            console.error("EmailJS Error:", await emailRes.text());
+            throw new Error("Gagal mengirim email OTP");
+        }
+
+        res.json({ success: true, message: "OTP sent to email" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/auth/verify-otp', async (req, res) => {
+    const { email, otp } = req.body;
+
+    try {
+        const { data } = await supabase.from('otp_codes')
+            .select('*')
+            .eq('email', email)
+            .eq('otp_code', otp)
+            .maybeSingle();
+
+        if (!data) return res.status(400).json({ error: "Kode OTP salah" });
+
+        if (new Date(data.expires_at) < new Date()) {
+            return res.status(400).json({ error: "Kode OTP kadaluarsa" });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+
+    try {
+        // Re-verify OTP to be safe
+        const { data } = await supabase.from('otp_codes')
+            .select('*')
+            .eq('email', email)
+            .eq('otp_code', otp)
+            .maybeSingle();
+
+        if (!data || new Date(data.expires_at) < new Date()) {
+            return res.status(400).json({ error: "Invalid or expired OTP" });
+        }
+
+        // Update Password
+        const { error } = await supabase.from('users')
+            .update({ password: newPassword }) // In real app, HASH THIS! 
+            .eq('email', email);
+
+        if (error) throw error;
+
+        // Clean up OTP
+        await supabase.from('otp_codes').delete().eq('email', email);
+
+        res.json({ success: true, message: "Password updated" });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 3.5 USERS (Registration)
 app.post('/api/users', async (req, res) => {
     const { username, password, name, email, phone, role, plan } = req.body;

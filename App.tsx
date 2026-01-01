@@ -6,6 +6,7 @@ import BrewingConsole from './pages/BrewingConsole';
 import AdminDashboard from './pages/AdminDashboard';
 import CheckoutPage from './pages/CheckoutPage';
 import MemberLogin from './pages/MemberLogin';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import { initPixel, trackPageView } from './utils/pixel';
 import { ToastProvider } from './components/Toast';
 
@@ -72,6 +73,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<MemberLogin />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route
             path="/app"
