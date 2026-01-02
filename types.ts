@@ -58,4 +58,6 @@ export interface FormData {
   profile: string;
   dose: number | string;
   temperature: 'hot' | 'iced';
+  customGrinder: string;
+  customBrewer: string;
 }

@@ -78,23 +78,45 @@ export default function BrewingConsole() {
     brewer: BREWERS[0],
     profile: PROFILES[0].id,
     dose: 15,
-    temperature: 'hot'
+    temperature: 'hot',
+    customGrinder: '',
+    customBrewer: ''
   });
 
-  const [brewerList, setBrewerList] = useState<string[]>(BREWERS);
+  const [brewerList, setBrewerList] = useState<any[]>([]);
+  const [grinderList, setGrinderList] = useState<any[]>([]);
+  const [allDrippers, setAllDrippers] = useState<any[]>([]);
 
-  // Fetch dynamic drippers
+  // Fetch dynamic drippers & grinders
   useEffect(() => {
-    const fetchDrippers = async () => {
-      const { data } = await supabase.from('drippers').select('name');
-      if (data && data.length > 0) {
-        const names = data.map(d => d.name);
-        // Filter duplicates if necessary, or just append. 
-        // We'll just simple append for now.
-        setBrewerList(prev => [...new Set([...prev, ...names])]);
+    const fetchData = async () => {
+      // Fetch Drippers
+      const { data: drippers } = await supabase.from('drippers').select('*');
+      if (drippers) {
+        setAllDrippers(drippers);
+        setBrewerList([
+          ...drippers.map(d => ({ id: d.name, name: d.name })), // SelectInput expects id/name
+          { id: 'Lainnya (Input Manual)', name: 'Lainnya (Input Manual)' }
+        ]);
+        // Set default if empty
+        if (drippers.length > 0) {
+          setFormData(prev => ({ ...prev, brewer: drippers[0].name }));
+        }
+      }
+
+      // Fetch Grinders
+      const { data: grinders } = await supabase.from('grinders').select('*');
+      if (grinders) {
+        setGrinderList([
+          ...grinders,
+          { id: 'other', name: 'Lainnya (Input Manual)', type: 'Custom', medium: 'Manual' }
+        ]);
+        if (grinders.length > 0) {
+          setFormData(prev => ({ ...prev, grinder: grinders[0].id }));
+        }
       }
     };
-    fetchDrippers();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -125,7 +147,18 @@ export default function BrewingConsole() {
         ? parseInt(formData.customPPM) || 50
         : (selectedWater?.ppm || 50);
 
-      const selectedGrinder = GRINDERS.find(g => g.id === formData.grinder);
+      const brewerName = formData.brewer === 'Lainnya (Input Manual)'
+        ? formData.customBrewer
+        : formData.brewer;
+
+      const selectedGrinder = grinderList.find(g => g.id === formData.grinder);
+      const grinderName = formData.grinder === 'other'
+        ? formData.customGrinder
+        : selectedGrinder?.name;
+
+      // DB stores 'medium' as string, e.g. "15 - 20 Klik"
+      const grinderSettings = selectedGrinder?.medium || "Medium Setting";
+
       const doseNum = typeof formData.dose === 'string' ? parseFloat(formData.dose) : formData.dose;
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -136,8 +169,8 @@ export default function BrewingConsole() {
       - Processing: ${processName}
       - Variety: ${varietyName}
       - Target Taste Profile: ${formData.profile} (options are: acidity, sweet, body, balance)
-      - Hardware: ${formData.brewer}
-      - Grinder: ${selectedGrinder?.name} (Standard Medium Range: ${selectedGrinder?.sedang.min}-${selectedGrinder?.sedang.max} ${selectedGrinder?.unit})
+      - Hardware: ${brewerName}
+      - Grinder: ${grinderName} (Suggested Medium Setting: ${grinderSettings} | Unit: ${selectedGrinder?.type || ''})
       - Water Chemistry: ${effectivePPM} PPM
       - Parameters: ${doseNum}g coffee, ${formData.temperature.toUpperCase()} brew.
       
@@ -372,11 +405,83 @@ export default function BrewingConsole() {
                 <div>
                   <Label>Brewer</Label>
                   <SelectInput name="brewer" value={formData.brewer} options={brewerList} onChange={handleInputChange} />
+
+                  {/* Selected Brewer Info */}
+                  {(() => {
+                    const selected = allDrippers.find(d => d.name === formData.brewer);
+                    if (selected) return (
+                      <div className="mt-3 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-400 space-y-1 animate-in fade-in">
+                        <div className="flex justify-between">
+                          <span className="font-bold text-zinc-500">Brand:</span>
+                          <span className="text-white">{selected.brand || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-bold text-zinc-500">Type:</span>
+                          <span className="text-white">{selected.type || "-"}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {formData.brewer === 'Lainnya (Input Manual)' && (
+                    <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                      <InputField
+                        type="text"
+                        name="customBrewer"
+                        placeholder="Masukkan nama alat seduh..."
+                        value={formData.customBrewer}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <Label>Grinder Model</Label>
-                  <SelectInput name="grinder" value={formData.grinder} options={GRINDERS} onChange={handleInputChange} />
+                  <SelectInput name="grinder" value={formData.grinder} options={grinderList} onChange={handleInputChange} />
+
+                  {/* Selected Grinder Info */}
+                  {(() => {
+                    const selected = grinderList.find(g => g.id === formData.grinder);
+                    if (selected && selected.id !== 'other') {
+                      // Handle JSONB or Flat parsing for display
+                      let mediumRange = "N/A";
+                      if (typeof selected.sedang === 'object') {
+                        mediumRange = `${selected.sedang.min} - ${selected.sedang.max}`;
+                      } else if (typeof selected.medium === 'string') {
+                        mediumRange = selected.medium; // Fallback or direct string
+                      }
+
+                      return (
+                        <div className="mt-3 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-400 space-y-1 animate-in fade-in">
+                          <div className="flex justify-between">
+                            <span className="font-bold text-zinc-500">Type:</span>
+                            <span className="text-white">{selected.type || "-"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-bold text-zinc-500">Unit:</span>
+                            <span className="text-white">{selected.unit || "-"}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 mt-1 border-t border-zinc-800">
+                            <span className="font-bold text-[#D4F932]">Medium Range:</span>
+                            <span className="text-white font-mono">{mediumRange}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })()}
+
+                  {formData.grinder === 'other' && (
+                    <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                      <InputField
+                        type="text"
+                        name="customGrinder"
+                        placeholder="Masukkan nama grinder..."
+                        value={formData.customGrinder}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
