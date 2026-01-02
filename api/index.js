@@ -5,8 +5,10 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
-dotenv.config();
-dotenv.config({ path: '.env.local' }); // Also load .env.local for local secrets
+// Load env vars. In Vercel, these come from the environment, but locally we need them.
+// trying to resolve from root if possible.
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -798,6 +800,6 @@ if (!process.env.VERCEL) {
         console.log(`[INFO] EmailJS Private Key: ${process.env.EMAILJS_PRIVATE_KEY ? (process.env.EMAILJS_PRIVATE_KEY.substring(0, 4) + '...') : 'MISSING (Required for Strict Mode)'}`);
         console.log(`[OK] Mode: ${process.env.XENDIT_IS_PRODUCTION === 'true' ? 'PRODUCTION' : 'SANDBOX'}`);
     }).on('error', (err) => {
-        console.error('[ERROR] Server failed to start:', err.message);
+        console.error("Server Start Error:", err);
     });
 }

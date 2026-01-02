@@ -152,7 +152,7 @@ export default function BrewingConsole() {
       8. Use professional Indonesian coffee terms: "Tuangan" instead of "Pour", "Aduk" instead of "Stir", etc. "Bloom" can stay as "Bloom".`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
