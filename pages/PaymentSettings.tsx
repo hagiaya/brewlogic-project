@@ -319,19 +319,7 @@ export default function PaymentSettings() {
                             </div>
 
                             <div className="space-y-6">
-                                {/* Xendit Sandbox */}
-                                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800">
-                                    <p className="text-xs font-bold text-zinc-400 mb-3 border-b border-zinc-800 pb-2">Xendit</p>
-                                    <div>
-                                        <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Secret Key</label>
-                                        <input
-                                            value={getVal('sandbox', 'xendit', 'secretKey')}
-                                            onChange={(e) => handlePaymentChange('sandbox', 'xendit', 'secretKey', e.target.value)}
-                                            className="w-full bg-black border border-zinc-700 p-2 rounded text-xs font-mono text-zinc-300 focus:border-[#D4F932] outline-none"
-                                            placeholder="xnd_development_..."
-                                        />
-                                    </div>
-                                </div>
+
 
                                 {/* Midtrans Sandbox */}
                                 <div className="bg-black/50 p-4 rounded-xl border border-zinc-800">
@@ -385,19 +373,7 @@ export default function PaymentSettings() {
                             </div>
 
                             <div className="space-y-6">
-                                {/* Xendit Production */}
-                                <div className="bg-black/50 p-4 rounded-xl border border-zinc-800">
-                                    <p className="text-xs font-bold text-zinc-400 mb-3 border-b border-zinc-800 pb-2">Xendit</p>
-                                    <div>
-                                        <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Secret Key</label>
-                                        <input
-                                            value={getVal('production', 'xendit', 'secretKey')}
-                                            onChange={(e) => handlePaymentChange('production', 'xendit', 'secretKey', e.target.value)}
-                                            className="w-full bg-black border border-zinc-700 p-2 rounded text-xs font-mono text-zinc-300 focus:border-red-500 outline-none"
-                                            placeholder="xnd_production_..."
-                                        />
-                                    </div>
-                                </div>
+
 
                                 {/* Midtrans Production */}
                                 <div className="bg-black/50 p-4 rounded-xl border border-zinc-800">

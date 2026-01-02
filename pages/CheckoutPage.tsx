@@ -30,7 +30,7 @@ export default function CheckoutPage() {
     // Restored State
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '' });
-    const [paymentMethod, setPaymentMethod] = useState('qris');
+    const [paymentMethod, setPaymentMethod] = useState('midtrans');
     const [voucherCode, setVoucherCode] = useState('');
     const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
     const [discountAmount, setDiscountAmount] = useState(0);
@@ -316,7 +316,7 @@ export default function CheckoutPage() {
                     <p className="text-zinc-400 mb-2">Status Pembayaran</p>
                     <div className="flex items-center justify-center gap-2 text-[#D4F932] font-bold uppercase text-lg">
                         <ShieldCheck size={20} />
-                        LUNAS via Xendit
+                        LUNAS
                     </div>
                 </div>
                 <a href="/login" className="bg-[#D4F932] text-black px-8 py-3 rounded-full font-bold hover:brightness-110 transition shadow-[0_0_20px_rgba(212,249,50,0.4)]">
@@ -413,7 +413,6 @@ export default function CheckoutPage() {
                             <div className="bg-[#111] p-6 rounded-2xl border border-zinc-900">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                                     {[
-                                        { id: 'xendit', name: 'Xendit (QRIS / VA)', sub: 'Instant Payment', icon: <Zap size={20} /> },
                                         { id: 'midtrans', name: 'Midtrans', sub: 'Gopay / ShopeePay / CC', icon: <Smartphone size={20} /> },
                                         { id: 'manual', name: 'Manual Transfer', sub: 'BCA / Mandiri / QRIS Manual', icon: <CreditCard size={20} /> },
                                     ].map((method) => (

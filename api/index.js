@@ -170,43 +170,7 @@ const saveConfig = async (key, value) => {
     return true;
 };
 
-// Xendit Helper
-const createXenditInvoice = async (orderId, amount, email, description) => {
-    const settings = await getConfig('payment_settings');
-    const mode = settings.isProduction ? 'production' : 'sandbox';
-    const keys = settings[mode]?.xendit || {}; // Updated structure
 
-    // Handling old structure fallback just in case
-    const secretKey = keys.secretKey || settings[mode]?.secretKey || process.env.XENDIT_SECRET_KEY;
-
-    if (!secretKey) throw new Error("Xendit Secret Key not found");
-
-    const auth = Buffer.from(secretKey + ':').toString('base64');
-
-    const response = await fetch('https://api.xendit.co/v2/invoices', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            external_id: orderId,
-            amount: amount,
-            payer_email: email,
-            description: description,
-            invoice_duration: 86400, // 24 hours
-            success_redirect_url: `${process.env.VITE_APP_URL || 'http://localhost:5173'}/#success`,
-            failure_redirect_url: `${process.env.VITE_APP_URL || 'http://localhost:5173'}/#failed`
-        })
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.message || "Failed to create Xendit Invoice");
-    }
-
-    return data;
-};
 
 // Midtrans Helper
 const createMidtransTransaction = async (orderId, amount, customerDetails) => {
@@ -268,7 +232,7 @@ app.post('/api/create-transaction', async (req, res) => {
             amount: total,
             status: 'pending',
             created_at: new Date().toISOString(),
-            payment_method: paymentMethod || 'xendit'
+            payment_method: paymentMethod || 'midtrans'
         };
 
         if (paymentMethod === 'manual') {
@@ -301,20 +265,8 @@ app.post('/api/create-transaction', async (req, res) => {
             });
 
         } else {
-            // XENDIT LOGIC (Default)
-            const invoice = await createXenditInvoice(orderId, total, email, packageName);
 
-            newTx.token = invoice.id;
-            newTx.payment_url = invoice.invoice_url;
-
-            const { error } = await supabase.from('transactions').insert([newTx]);
-            if (error) throw error;
-
-            res.json({
-                redirect_url: invoice.invoice_url,
-                order_id: orderId,
-                is_manual: false
-            });
+            throw new Error("Metode pembayaran tidak valid");
         }
 
     } catch (error) {
@@ -356,16 +308,8 @@ app.post('/api/webhooks/notification', async (req, res) => {
 
             // 2. Detect Xendit (Invoice Callback)
             // Xendit sends: status, external_id, id
-        } else if (body.status && body.external_id) {
-            provider = 'xendit';
-            orderId = body.external_id;
-
-            if (body.status === 'PAID' || body.status === 'SETTLED') {
-                status = 'success';
-            } else if (body.status === 'EXPIRED') {
-                status = 'failed';
-            }
         }
+
 
         if (orderId && provider !== 'unknown') {
             // Update Transaction in DB
