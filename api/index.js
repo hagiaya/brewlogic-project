@@ -105,6 +105,38 @@ const DEFAULT_CONTENT = {
 
 // --- HELPERS FOR DB CONFIG (Replacing File System) ---
 
+// Helper: Send Email via EmailJS
+const sendEmail = async ({ toName, toEmail, subject, message }) => {
+    try {
+        const emailData = {
+            service_id: process.env.VITE_EMAILJS_SERVICE_ID,
+            template_id: process.env.VITE_EMAILJS_TEMPLATE_ID,
+            user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
+            accessToken: process.env.EMAILJS_PRIVATE_KEY,
+            template_params: {
+                to_name: toName,
+                to_email: toEmail,
+                subject: subject,
+                message: message,
+            }
+        };
+
+        const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(emailData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`EmailJS Error: ${await response.text()}`);
+        }
+        return true;
+    } catch (error) {
+        console.error("Failed to send email:", error);
+        return false;
+    }
+};
+
 // Helper: Get Config from DB
 // Helper: Get Config from DB
 const getConfig = async (key, defaultValue) => {
@@ -343,6 +375,16 @@ app.post('/api/webhooks/notification', async (req, res) => {
                             subscription_end: end.toISOString()
                         })
                         .eq('email', tx.email);
+
+                    // Send Success Email
+                    await sendEmail({
+                        toName: tx.customer_name || "Customer",
+                        toEmail: tx.email,
+                        subject: "Pembayaran Berhasil - BrewLogic",
+                        message: "Pembayaran Anda telah berhasil, mohon tunggu 1x24 jam untuk aktivasi akun Anda."
+                    });
+
+                    console.log(`[EMAIL] Success notification sent to ${tx.email}`);
                 }
             }
 
@@ -419,32 +461,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         if (dbError) throw dbError;
 
         // 4. Send Email (via EmailJS REST API)
-        // Note: Using REST API because we are on server
-        const emailData = {
-            service_id: process.env.VITE_EMAILJS_SERVICE_ID,
-            template_id: process.env.VITE_EMAILJS_TEMPLATE_ID,
-            user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
-            accessToken: process.env.EMAILJS_PRIVATE_KEY, // REQUIRED for non-browser/server-side requests
-            template_params: {
-                to_name: user.name || "User",
-                to_email: targetEmail,
-                subject: "Reset Password OTP",
-                message: `Kode OTP Anda adalah: ${otp}`,
-                action_url: "",
-                action_text: ""
-            }
-        };
-
-        const emailRes = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(emailData)
+        await sendEmail({
+            toName: user.name || "User",
+            toEmail: targetEmail,
+            subject: "Reset Password OTP",
+            message: `Kode OTP Anda adalah: ${otp}`
         });
-
-        if (!emailRes.ok) {
-            console.error("EmailJS Error:", await emailRes.text());
-            throw new Error("Gagal mengirim email OTP");
-        }
 
         res.json({ success: true, message: "OTP sent to email" });
 
