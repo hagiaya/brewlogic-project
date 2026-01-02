@@ -40,16 +40,47 @@ export default function CheckoutPage() {
     };
 
     const handleRedeemVoucher = async () => {
+        if (!voucherCode) return;
         setLoading(true);
-        // Simulating voucher check (replace with DB check if needed)
-        if (voucherCode === 'BREW10') {
-            setAppliedVoucher({ code: 'BREW10', discount_type: 'percentage', discount_value: 10 });
-            setDiscountAmount(pkgValue * 0.1);
-            toast.success("Voucher Applied!");
-        } else {
-            toast.error("Voucher Invalid");
+
+        try {
+            const response = await fetch(`${API_URL}/validate-voucher`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: voucherCode })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                toast.error(data.error || "Voucher Invalid");
+                setLoading(false);
+                return;
+            }
+
+            const voucher = data.voucher;
+            setAppliedVoucher(voucher);
+
+            // Calculate Discount
+            let discount = 0;
+            if (voucher.discount_type === 'percentage') {
+                discount = (pkgValue || 0) * (voucher.discount_value / 100);
+            } else if (voucher.discount_type === 'fixed') {
+                discount = voucher.discount_value;
+            }
+
+            // Cap discount to not exceed total (optional safety)
+            if (discount > pkgValue) discount = pkgValue;
+
+            setDiscountAmount(discount);
+            toast.success(`Voucher ${voucher.code} Applied!`);
+
+        } catch (error) {
+            console.error(error);
+            toast.error("Gagal mengecek voucher");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const removeVoucher = () => {

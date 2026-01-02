@@ -526,6 +526,29 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
 });
 
+// VALIDATE VOUCHER
+app.post('/api/validate-voucher', async (req, res) => {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: "Voucher code required" });
+
+    try {
+        const { data, error } = await supabase
+            .from('vouchers')
+            .select('*')
+            .eq('code', code)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return res.status(404).json({ error: "Voucher tidak ditemukan" });
+
+        res.json({ success: true, voucher: data });
+
+    } catch (err) {
+        console.error("Voucher Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // MEMBER LOGIN
 app.post('/api/member-login', async (req, res) => {
     const { username, password } = req.body;

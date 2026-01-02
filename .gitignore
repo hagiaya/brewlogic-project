@@ -9,3 +9,5 @@ database.json
 *.log
 
 mail
+.vercel
+.env*.local
