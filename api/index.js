@@ -106,7 +106,7 @@ const DEFAULT_CONTENT = {
 // --- HELPERS FOR DB CONFIG (Replacing File System) ---
 
 // Helper: Send Email via EmailJS
-const sendEmail = async ({ toName, toEmail, subject, message }) => {
+const sendEmail = async ({ toName, toEmail, subject, message, actionUrl = "", actionText = "" }) => {
     try {
         const emailData = {
             service_id: process.env.VITE_EMAILJS_SERVICE_ID,
@@ -118,6 +118,8 @@ const sendEmail = async ({ toName, toEmail, subject, message }) => {
                 to_email: toEmail,
                 subject: subject,
                 message: message,
+                action_url: actionUrl,
+                action_text: actionText
             }
         };
 
@@ -130,6 +132,7 @@ const sendEmail = async ({ toName, toEmail, subject, message }) => {
         if (!response.ok) {
             throw new Error(`EmailJS Error: ${await response.text()}`);
         }
+        console.log(`[EMAIL SUCCESS] Sent to ${toEmail}`);
         return true;
     } catch (error) {
         console.error("Failed to send email:", error);
@@ -137,7 +140,6 @@ const sendEmail = async ({ toName, toEmail, subject, message }) => {
     }
 };
 
-// Helper: Get Config from DB
 // Helper: Get Config from DB
 const getConfig = async (key, defaultValue) => {
     // CRITICAL FIX: Bypass DB for payment settings on Netlify to prevent 502 timeouts
@@ -201,8 +203,6 @@ const saveConfig = async (key, value) => {
     }
     return true;
 };
-
-
 
 // Midtrans Helper
 const createMidtransTransaction = async (orderId, amount, customerDetails) => {
@@ -277,6 +277,7 @@ app.post('/api/create-transaction', async (req, res) => {
             const { error } = await supabase.from('transactions').insert([newTx]);
             if (error) throw error;
 
+            console.log(`[MANUAL TX] Created: ${orderId} for ${email}`);
             res.json({ success: true, order_id: orderId, is_manual: true });
 
         } else if (paymentMethod === 'midtrans') {
@@ -381,7 +382,7 @@ app.post('/api/webhooks/notification', async (req, res) => {
                         toName: tx.customer_name || "Customer",
                         toEmail: tx.email,
                         subject: "Pembayaran Berhasil - BrewLogic",
-                        message: "Pembayaran Anda telah berhasil, mohon tunggu 1x24 jam untuk aktivasi akun Anda."
+                        message: "Terima kasih pembayaran anda telah di terima mohon menunggu 1x24 jam untuk aktivasi akun."
                     });
 
                     console.log(`[EMAIL] Success notification sent to ${tx.email}`);

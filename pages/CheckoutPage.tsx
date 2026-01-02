@@ -5,7 +5,7 @@ import { Sparkles, ArrowLeft, CreditCard, CheckCircle, Loader2, ArrowRight, Smar
 import { trackEvent } from '../utils/pixel';
 import { supabase } from '../utils/supabaseClient';
 import { useToast } from '../components/Toast';
-import { sendOrderEmail } from '../utils/emailService';
+import { sendOrderEmail, sendPaymentReceivedEmail } from '../utils/emailService';
 
 
 
@@ -192,17 +192,21 @@ export default function CheckoutPage() {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
 
-            // SEND EMAIL NOTIFICATION (Async - don't block flow)
-            sendOrderEmail({
-                name: formData.name,
-                email: formData.email,
-                order_id: data.order_id,
-                package_name: pkgName,
-                amount: finalTotal,
-                payment_method: paymentMethod,
-                status: paymentMethod === 'manual' ? 'Menunggu Konfirmasi' : 'Link Pembayaran Terkirim',
-                payment_link: data.payment_url || data.redirect_url
-            });
+            // SEND EMAIL NOTIFICATION
+            if (paymentMethod === 'manual') {
+                sendPaymentReceivedEmail(formData.email, formData.name, data.order_id, pkgName);
+            } else {
+                sendOrderEmail({
+                    name: formData.name,
+                    email: formData.email,
+                    order_id: data.order_id,
+                    package_name: pkgName,
+                    amount: finalTotal,
+                    payment_method: paymentMethod,
+                    status: 'Link Pembayaran Terkirim',
+                    payment_link: data.payment_url || data.redirect_url
+                });
+            }
 
             if (data.is_manual) {
                 // SUCCESS MANUAL

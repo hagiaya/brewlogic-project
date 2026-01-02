@@ -99,3 +99,18 @@ export const sendActivationEmail = async (email, name, planName, expiryDate) => 
         action_text: "Login Sekarang"
     });
 };
+// 5. PAYMENT RECEIVED EMAIL (Pending Activation)
+export const sendPaymentReceivedEmail = async (email, name, orderId, planName) => {
+    const message = `
+        Terima kasih pembayaran anda telah di terima mohon menunggu 1x24 jam untuk aktivasi akun.
+    `;
+
+    return await sendEmailGeneric({
+        to_name: name || "User",
+        to_email: email,
+        subject: "Pembayaran Diterima - Menunggu Aktivasi",
+        message: message,
+        action_url: "",
+        action_text: ""
+    });
+};
