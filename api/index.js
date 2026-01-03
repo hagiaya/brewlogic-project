@@ -108,11 +108,21 @@ const DEFAULT_CONTENT = {
 // Helper: Send Email via EmailJS
 const sendEmail = async ({ toName, toEmail, subject, message, actionUrl = "", actionText = "" }) => {
     try {
+        const service_id = process.env.VITE_EMAILJS_SERVICE_ID;
+        const template_id = process.env.VITE_EMAILJS_TEMPLATE_ID;
+        const user_id = process.env.VITE_EMAILJS_PUBLIC_KEY;
+        const accessToken = process.env.EMAILJS_PRIVATE_KEY;
+
+        if (!service_id || !template_id || !user_id || !accessToken) {
+            console.error("[EMAIL ERROR] Missing EmailJS Configuration in Env Vars");
+            return { success: false, error: "Missing Config" };
+        }
+
         const emailData = {
-            service_id: process.env.VITE_EMAILJS_SERVICE_ID,
-            template_id: process.env.VITE_EMAILJS_TEMPLATE_ID,
-            user_id: process.env.VITE_EMAILJS_PUBLIC_KEY,
-            accessToken: process.env.EMAILJS_PRIVATE_KEY,
+            service_id,
+            template_id,
+            user_id,
+            accessToken,
             template_params: {
                 to_name: toName,
                 to_email: toEmail,
@@ -130,13 +140,16 @@ const sendEmail = async ({ toName, toEmail, subject, message, actionUrl = "", ac
         });
 
         if (!response.ok) {
-            throw new Error(`EmailJS Error: ${await response.text()}`);
+            const errText = await response.text();
+            console.error(`[EMAIL ERROR] EmailJS Response: ${response.status} - ${errText}`);
+            return { success: false, error: errText };
         }
+
         console.log(`[EMAIL SUCCESS] Sent to ${toEmail}`);
-        return true;
+        return { success: true };
     } catch (error) {
-        console.error("Failed to send email:", error);
-        return false;
+        console.error("[EMAIL ERROR] Fetch Exception:", error);
+        return { success: false, error: error.message };
     }
 };
 
@@ -378,14 +391,18 @@ app.post('/api/webhooks/notification', async (req, res) => {
                         .eq('email', tx.email);
 
                     // Send Success Email
-                    await sendEmail({
+                    const emailResult = await sendEmail({
                         toName: tx.customer_name || "Customer",
                         toEmail: tx.email,
                         subject: "Pembayaran Berhasil - BrewLogic",
                         message: "Terima kasih pembayaran anda telah di terima mohon menunggu 1x24 jam untuk aktivasi akun."
                     });
 
-                    console.log(`[EMAIL] Success notification sent to ${tx.email}`);
+                    if (emailResult.success) {
+                        console.log(`[EMAIL] Success notification sent to ${tx.email}`);
+                    } else {
+                        console.error(`[EMAIL] Failed to send success notification to ${tx.email}: ${emailResult.error}`);
+                    }
                 }
             }
 
@@ -462,12 +479,17 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         if (dbError) throw dbError;
 
         // 4. Send Email (via EmailJS REST API)
-        await sendEmail({
+        const emailResult = await sendEmail({
             toName: user.name || "User",
             toEmail: targetEmail,
             subject: "Reset Password OTP",
             message: `Kode OTP Anda adalah: ${otp}`
         });
+
+        if (!emailResult.success) {
+            console.error(`[FORGOT PASSWORD ERROR] Email Failed: ${emailResult.error}`);
+            return res.status(500).json({ error: "Gagal mengirim email OTP. Silakan coba lagi nanti." });
+        }
 
         res.json({ success: true, message: "OTP sent to email" });
 
