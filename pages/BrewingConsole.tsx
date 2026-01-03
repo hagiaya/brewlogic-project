@@ -94,10 +94,7 @@ export default function BrewingConsole() {
       const { data: drippers } = await supabase.from('drippers').select('*');
       if (drippers) {
         setAllDrippers(drippers);
-        setBrewerList([
-          ...drippers.map(d => ({ id: d.name, name: d.name })), // SelectInput expects id/name
-          { id: 'Lainnya (Input Manual)', name: 'Lainnya (Input Manual)' }
-        ]);
+        setBrewerList(drippers.map(d => ({ id: d.name, name: d.name })));
         // Set default if empty
         if (drippers.length > 0) {
           setFormData(prev => ({ ...prev, brewer: drippers[0].name }));
@@ -107,10 +104,7 @@ export default function BrewingConsole() {
       // Fetch Grinders
       const { data: grinders } = await supabase.from('grinders').select('*');
       if (grinders) {
-        setGrinderList([
-          ...grinders,
-          { id: 'other', name: 'Lainnya (Input Manual)', type: 'Custom', medium: 'Manual' }
-        ]);
+        setGrinderList(grinders);
         if (grinders.length > 0) {
           setFormData(prev => ({ ...prev, grinder: grinders[0].id }));
         }
@@ -156,8 +150,15 @@ export default function BrewingConsole() {
         ? formData.customGrinder
         : selectedGrinder?.name;
 
-      // DB stores 'medium' as string, e.g. "15 - 20 Klik"
-      const grinderSettings = selectedGrinder?.medium || "Medium Setting";
+      // Extract grinder settings properly
+      let grinderSettings = "Medium Setting";
+      if (selectedGrinder) {
+        if (typeof selectedGrinder.sedang === 'object') {
+          grinderSettings = `${selectedGrinder.sedang.min} - ${selectedGrinder.sedang.max} ${selectedGrinder.unit || ''}`;
+        } else if (typeof selectedGrinder.medium === 'string') {
+          grinderSettings = selectedGrinder.medium;
+        }
+      }
 
       const doseNum = typeof formData.dose === 'string' ? parseFloat(formData.dose) : formData.dose;
 
@@ -170,19 +171,31 @@ export default function BrewingConsole() {
       - Variety: ${varietyName}
       - Target Taste Profile: ${formData.profile} (options are: acidity, sweet, body, balance)
       - Hardware: ${brewerName}
-      - Grinder: ${grinderName} (Suggested Medium Setting: ${grinderSettings} | Unit: ${selectedGrinder?.type || ''})
+      - Grinder: ${grinderName} (Reference Medium Setting: ${grinderSettings})
       - Water Chemistry: ${effectivePPM} PPM
       - Parameters: ${doseNum}g coffee, ${formData.temperature.toUpperCase()} brew.
       
       Rules:
-      1. For ICED brew, use a higher ratio (approx 1:15 total) but divide into ~60% hot water and ~40% ice in server.
-      2. For HOT brew, adjust ratio between 1:15 to 1:17 based on profile.
-      3. Temperature should be between 80-99C.
-      4. Grind setting MUST be a specific range (e.g., "14.5 - 15.5") within or slightly adjusted from the provided Medium Range for this grinder.
-      5. Sequence must include a Bloom step and 2-3 subsequent pours.
-      6. Each step note should be concise, clear, and professional.
-      7. MANDATORY: All instructions in "action" and "note" inside the "steps" array MUST be in Indonesian (Bahasa Indonesia).
-      8. Use professional Indonesian coffee terms: "Tuangan" instead of "Pour", "Aduk" instead of "Stir", etc. "Bloom" can stay as "Bloom".`;
+      Rules:
+      1. For ICED brew: use a 1:12 to 1:13 ratio (e.g. 15g coffee to 180-200ml total), divide into 60% hot water for brewing and 40% ice in the server.
+      2. For HOT brew: use a strict 1:15 ratio for "Sweet" and "Body" profiles, and 1:16 ratio for "Balance" and "Acidity" profiles.
+      3. Temperature: MUST be exactly one number (e.g. 92) between 88-96C.
+      4. Grind setting: MUST be a SPECIFIC NUMERIC RANGE (e.g., "21 - 22" or "15.5 - 16.5") followed by the unit.
+         - Units: "Klik", "Nomor", "Putaran", or "Setting".
+         - Example: "21 - 22 Klik".
+         - NEVER use generic words like "Medium-Fine" or "Depends on your grinder".
+         - Base it strictly on the Reference: ${grinderSettings}.
+      5. Sequence: Bloom followed by 2-3 pours. 
+      6. Special Hardware Logic: 
+         - If using "Hario Switch", include "Switch Terbuka" (open) or "Switch Tertutup" (closed) in the action titles where appropriate (e.g. "Tuangan Pertama (Switch Terbuka)").
+         - Use similar logic for immersion drippers like "Clever Dripper".
+      7. Step Action Titles: MUST be concise Indonesian titles (e.g., "Bloom", "Tuangan Pertama", "Tuangan Kedua").
+         - DO NOT include water amount or temperature in the action title string.
+      8. All instructions (action and note) MUST be in professional Indonesian (Bahasa Indonesia).
+         - "Tuangan" instead of "Pour"
+         - "Aduk" instead of "Stir"
+         - "Tunggu" instead of "Wait"
+         - "Bloom" can stay as "Bloom".`;
 
       const response = await ai.models.generateContent({
         model: "gemini-2.0-flash",
@@ -405,83 +418,11 @@ export default function BrewingConsole() {
                 <div>
                   <Label>Brewer</Label>
                   <SelectInput name="brewer" value={formData.brewer} options={brewerList} onChange={handleInputChange} />
-
-                  {/* Selected Brewer Info */}
-                  {(() => {
-                    const selected = allDrippers.find(d => d.name === formData.brewer);
-                    if (selected) return (
-                      <div className="mt-3 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-400 space-y-1 animate-in fade-in">
-                        <div className="flex justify-between">
-                          <span className="font-bold text-zinc-500">Brand:</span>
-                          <span className="text-white">{selected.brand || "-"}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-bold text-zinc-500">Type:</span>
-                          <span className="text-white">{selected.type || "-"}</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {formData.brewer === 'Lainnya (Input Manual)' && (
-                    <div className="mt-3 animate-in fade-in slide-in-from-top-2">
-                      <InputField
-                        type="text"
-                        name="customBrewer"
-                        placeholder="Masukkan nama alat seduh..."
-                        value={formData.customBrewer}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <div>
                   <Label>Grinder Model</Label>
                   <SelectInput name="grinder" value={formData.grinder} options={grinderList} onChange={handleInputChange} />
-
-                  {/* Selected Grinder Info */}
-                  {(() => {
-                    const selected = grinderList.find(g => g.id === formData.grinder);
-                    if (selected && selected.id !== 'other') {
-                      // Handle JSONB or Flat parsing for display
-                      let mediumRange = "N/A";
-                      if (typeof selected.sedang === 'object') {
-                        mediumRange = `${selected.sedang.min} - ${selected.sedang.max}`;
-                      } else if (typeof selected.medium === 'string') {
-                        mediumRange = selected.medium; // Fallback or direct string
-                      }
-
-                      return (
-                        <div className="mt-3 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-400 space-y-1 animate-in fade-in">
-                          <div className="flex justify-between">
-                            <span className="font-bold text-zinc-500">Type:</span>
-                            <span className="text-white">{selected.type || "-"}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="font-bold text-zinc-500">Unit:</span>
-                            <span className="text-white">{selected.unit || "-"}</span>
-                          </div>
-                          <div className="flex justify-between items-center pt-1 mt-1 border-t border-zinc-800">
-                            <span className="font-bold text-[#D4F932]">Medium Range:</span>
-                            <span className="text-white font-mono">{mediumRange}</span>
-                          </div>
-                        </div>
-                      );
-                    }
-                  })()}
-
-                  {formData.grinder === 'other' && (
-                    <div className="mt-3 animate-in fade-in slide-in-from-top-2">
-                      <InputField
-                        type="text"
-                        name="customGrinder"
-                        placeholder="Masukkan nama grinder..."
-                        value={formData.customGrinder}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <div>

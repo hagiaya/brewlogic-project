@@ -68,7 +68,6 @@ export const GRINDERS: GrinderOption[] = [
   { id: 'timemore_slimplus', name: 'Timemore Slim Plus', unit: 'Klik', kasar: { min: 22, max: 26 }, sedang: { min: 15, max: 20 }, halus: { min: 10, max: 14 } },
   { id: 'varia_hand', name: 'Varia Hand Grinder', unit: 'Klik', kasar: { min: 90, max: 110 }, sedang: { min: 60, max: 85 }, halus: { min: 20, max: 40 } },
   { id: 'wacaco_exagrind', name: 'Wacaco Exagrind', unit: 'Putaran/Klik', kasar: { min: 1.5, max: 2.0 }, sedang: { min: 1.0, max: 1.3 }, halus: { min: 0, max: 20 } },
-  { id: 'other', name: 'Lainnya (Input Manual)', unit: 'Custom', kasar: { min: 0, max: 0 }, sedang: { min: 0, max: 0 }, halus: { min: 0, max: 0 } }
 ];
 
 export const BREWERS = [
@@ -101,8 +100,7 @@ export const BREWERS = [
   "Timemore B75",
   "Timemore Crystal Eye",
   "Torch Mountain",
-  "Vietnam Drip",
-  "Lainnya (Input Manual)"
+  "Vietnam Drip"
 ];
 
 export const PROFILES: ProfileOption[] = [
