@@ -395,7 +395,9 @@ app.post('/api/webhooks/notification', async (req, res) => {
                         toName: tx.customer_name || "Customer",
                         toEmail: tx.email,
                         subject: "Pembayaran Berhasil - BrewLogic",
-                        message: "Terima kasih pembayaran anda telah di terima mohon menunggu 1x24 jam untuk aktivasi akun."
+                        message: "Terima kasih pembayaran anda telah di terima mohon menunggu 1x24 jam untuk aktivasi akun.",
+                        actionUrl: "https://www.brewlogic.app/login",
+                        actionText: "Cek Status Akun"
                     });
 
                     if (emailResult.success) {

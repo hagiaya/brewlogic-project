@@ -95,7 +95,7 @@ export const sendActivationEmail = async (email, name, planName, expiryDate) => 
         to_email: email,
         subject: "Akun BrewLogic Anda Telah Aktif!",
         message: message,
-        action_url: `${window.location.origin}/login`,
+        action_url: "https://www.brewlogic.app/login",
         action_text: "Login Sekarang"
     });
 };
